@@ -1,0 +1,17 @@
+{
+  "name": "checkout-permit2",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat compile"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "ethers": "^5.7.2",
+    "express": "^4.19.2"
+  }
+}
