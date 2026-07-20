@@ -1,13 +1,4 @@
-/**
- * Backend: order total + nonce management for CheckoutPermit2 flow.
- * Node.js / Express + ethers v5. Adjust for your stack as needed.
- *
- * Why this matters: the frontend must never be trusted to say how much
- * an order costs. The signed `amount` the customer sees in their wallet
- * has to come from server-side order data, or a compromised/malicious
- * client could ask the customer to sign a different amount than what
- * they actually owe.
- */
+
 
 const express = require("express");
 const { ethers } = require("ethers");
@@ -29,15 +20,7 @@ const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
 const permit2 = new ethers.Contract(PERMIT2_ADDRESS, PERMIT2_ABI, provider);
 const checkoutInterface = new ethers.utils.Interface(CHECKOUT_ABI);
 
-// --- 1. Server-computed order total ----------------------------------
 
-/**
- * GET /api/orders/:orderId/checkout-quote
- *
- * Returns the authoritative amount (and token) the customer must sign
- * for. Pulled from your own order/cart records — never from anything
- * the client sends in this request.
- */
 router.get("/api/orders/:orderId/checkout-quote", async (req, res) => {
   const { orderId } = req.params;
 
@@ -48,16 +31,12 @@ router.get("/api/orders/:orderId/checkout-quote", async (req, res) => {
     return res.status(409).json({ error: "Order is not payable" });
   }
 
-  // Convert your stored order total into the token's smallest unit.
-  // Example assumes order.totalUsdc is a decimal string like "49.99"
-  // and the token has 6 decimals (USDC).
   const amountWei = ethers.utils.parseUnits(order.totalUsdc, 6).toString();
 
   // Short-lived quote so the price can't be replayed indefinitely.
   const quoteExpiresAt = Math.floor(Date.now() / 1000) + 15 * 60;
 
-  // Persist this quote so /api/orders/:orderId/confirm can verify the
-  // transaction that eventually comes in actually matches it.
+  
   await saveCheckoutQuote(orderId, {
     tokenAddress: order.tokenAddress,
     amountWei,

@@ -1,0 +1,45 @@
+[2026-07-20T15:04:52.246Z] Relayer admin address: 0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA
+[2026-07-20T15:04:52.262Z] ✓ Express app running on port 3000
+[2026-07-20T15:04:52.263Z] ✓ Checkout backend mounted
+[2026-07-20T15:04:52.263Z] ✓ Checkout relayer mounted
+[2026-07-20T15:04:52.263Z] 
+Endpoints:
+[2026-07-20T15:04:52.263Z]   POST /api/orders/execute-payment (relayer - gasless)
+[2026-07-20T15:04:52.263Z]   GET  /api/orders/:orderId/checkout-quote (backend)
+[2026-07-20T15:04:52.264Z]   POST /api/orders/:orderId/confirm (backend)
+[2026-07-20T15:13:53.941Z] Relayer admin address: 0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA
+[2026-07-20T15:13:53.954Z] ✓ Express app running on port 3000
+[2026-07-20T15:13:53.955Z] ✓ Checkout backend mounted
+[2026-07-20T15:13:53.955Z] ✓ Checkout relayer mounted
+[2026-07-20T15:13:53.955Z] 
+Endpoints:
+[2026-07-20T15:13:53.956Z]   POST /api/orders/execute-payment (relayer - gasless)
+[2026-07-20T15:13:53.956Z]   GET  /api/orders/:orderId/checkout-quote (backend)
+[2026-07-20T15:13:53.957Z]   POST /api/orders/:orderId/confirm (backend)
+[2026-07-20T15:31:03.813Z] Relayer admin address: 0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA
+[2026-07-20T15:31:03.821Z] ✓ Express app running on port 3000
+[2026-07-20T15:31:03.821Z] ✓ Checkout backend mounted
+[2026-07-20T15:31:03.822Z] ✓ Checkout relayer mounted
+[2026-07-20T15:31:03.822Z] 
+Endpoints:
+[2026-07-20T15:31:03.822Z]   POST /api/orders/execute-payment (relayer - gasless)
+[2026-07-20T15:31:03.822Z]   GET  /api/orders/:orderId/checkout-quote (backend)
+[2026-07-20T15:31:03.822Z]   POST /api/orders/:orderId/confirm (backend)
+[2026-07-20T15:31:55.564Z] Relayer admin address: 0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA
+[2026-07-20T15:31:55.573Z] ✓ Express app running on port 3000
+[2026-07-20T15:31:55.574Z] ✓ Checkout backend mounted
+[2026-07-20T15:31:55.574Z] ✓ Checkout relayer mounted
+[2026-07-20T15:31:55.574Z] 
+Endpoints:
+[2026-07-20T15:31:55.574Z]   POST /api/orders/execute-payment (relayer - gasless)
+[2026-07-20T15:31:55.575Z]   GET  /api/orders/:orderId/checkout-quote (backend)
+[2026-07-20T15:31:55.575Z]   POST /api/orders/:orderId/confirm (backend)
+[2026-07-20T15:38:19.554Z] Relayer admin address: 0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA
+[2026-07-20T15:38:19.564Z] ✓ Express app running on port 3000
+[2026-07-20T15:38:19.564Z] ✓ Checkout backend mounted
+[2026-07-20T15:38:19.564Z] ✓ Checkout relayer mounted
+[2026-07-20T15:38:19.564Z] 
+Endpoints:
+[2026-07-20T15:38:19.565Z]   POST /api/orders/execute-payment (relayer - gasless)
+[2026-07-20T15:38:19.565Z]   GET  /api/orders/:orderId/checkout-quote (backend)
+[2026-07-20T15:38:19.565Z]   POST /api/orders/:orderId/confirm (backend)

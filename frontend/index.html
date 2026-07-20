@@ -1,182 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Checkout</title>
-<style>
-  :root {
-    --ink: #14171a;
-    --paper: #fafaf9;
-    --line: #e3e1dc;
-    --accent: #2b5fff;
-    --accent-dim: #eef2ff;
-    --danger: #b3261e;
-    --danger-dim: #fbeceb;
-    --success: #1e7a3d;
-    --success-dim: #eaf6ee;
-    --mono: "SF Mono", "IBM Plex Mono", ui-monospace, monospace;
-    --sans: "Inter", -apple-system, "Segoe UI", sans-serif;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-  * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
 
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: none;
+    }
 
-  .card {
-    width: 100%;
-    max-width: 420px;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 28px;
-  }
+    .card.connected {
+      display: block;
+    }
 
-  .eyebrow {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #8a8680;
-    margin: 0 0 6px;
-  }
+    #status {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
 
-  h1 {
-    font-size: 20px;
-    margin: 0 0 20px;
-    font-weight: 600;
-  }
+    .wallet-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
 
-  .line {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
-    font-size: 14px;
-  }
+    .wallet-btn:hover {
+      background: #f9f9f9;
+      border-color: #2b5fff;
+      color: #2b5fff;
+    }
 
-  .line:last-of-type { border-bottom: none; }
-
-  .line .label { color: #6b6862; }
-  .line .value { font-family: var(--mono); font-weight: 500; }
-
-  .total {
-    display: flex;
-    justify-content: space-between;
-    padding: 16px 0 4px;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  button {
-    width: 100%;
-    padding: 14px;
-    border-radius: 9px;
-    border: none;
-    font-size: 15px;
-    font-weight: 600;
-    font-family: var(--sans);
-    cursor: pointer;
-    margin-top: 18px;
-    transition: opacity 0.15s ease;
-  }
-
-  button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-  }
-  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
-
-  .status {
-    margin-top: 16px;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.5;
-    display: none;
-  }
-
-  .status.show { display: block; }
-  .status.info { background: var(--accent-dim); color: #1e3ea8; }
-  .status.error { background: var(--danger-dim); color: var(--danger); }
-  .status.success { background: var(--success-dim); color: var(--success); }
-
-  .status a {
-    color: inherit;
-    text-decoration: underline;
-  }
-
-  .steps {
-    display: flex;
-    gap: 6px;
-    margin-top: 20px;
-  }
-
-  .step {
-    flex: 1;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--line);
-  }
-
-  .step.active { background: var(--accent); }
-  .step.done { background: var(--success); }
-
-  .step-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: #8a8680;
-    margin-top: 8px;
-  }
-</style>
+    .wallet-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: #e0e0e0;
+      flex-shrink: 0;
+    }
+  </style>
 </head>
 <body>
-
-<div class="card">
-  <p class="eyebrow">Order #ORDER_PLACEHOLDER</p>
-  <h1>Checkout</h1>
-
-  <div class="line">
-    <span class="label">Item</span>
-    <span class="value" id="item-name">—</span>
-  </div>
-  <div class="line">
-    <span class="label">Token</span>
-    <span class="value" id="token-symbol">—</span>
-  </div>
-  <div class="total">
-    <span>Total</span>
-    <span id="total-amount">—</span>
+  <div class="card">
+    <div id="status"></div>
   </div>
 
-  <div class="steps">
-    <div class="step" id="step-1"></div>
-    <div class="step" id="step-2"></div>
-    <div class="step" id="step-3"></div>
-  </div>
-  <p class="step-label" id="step-label">Step 1 of 3 — Connect your wallet</p>
-
-  <button class="btn-primary" id="action-btn">Connect Wallet</button>
-
-  <div class="status" id="status"></div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<script type="module" src="checkout.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.14.0/dist/ethers.umd.min.js"></script>
+  <script type="module" src="checkout.js"></script>
 </body>
 </html>

