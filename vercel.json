@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "public": false,
   "env": [
     "ADMIN_PRIVATE_KEY",
     "RPC_URL",
