@@ -10,7 +10,7 @@ const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
   CHAIN_ID: 11155111,
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
-  BACKEND_URL: window.location.protocol + "//" + window.location.hostname + ":3000",
+  BACKEND_URL: window.location.origin, // Same origin for Vercel API
 };
 
 let provider, signer, userAddress;
