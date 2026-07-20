@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "env": [
-    "ADMIN_PRIVATE_KEY",
-    "RPC_URL",
-    "CHECKOUT_CONTRACT_ADDRESS"
-  ],
+  "env": {
+    "ADMIN_PRIVATE_KEY": "@admin_private_key",
+    "RPC_URL": "@rpc_url",
+    "CHECKOUT_CONTRACT_ADDRESS": "@checkout_contract_address"
+  },
   "functions": {
     "api/**/*.js": {
       "runtime": "nodejs20.x"
