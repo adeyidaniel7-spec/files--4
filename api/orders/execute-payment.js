@@ -4,6 +4,27 @@ const CHECKOUT_ABI = [
   "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
 ];
 
+// Supported networks configuration
+// Add more networks as you expand support
+const NETWORKS = {
+  11155111: {
+    name: "Sepolia Testnet",
+    rpcUrl: process.env.SEPOLIA_RPC_URL || process.env.RPC_URL,
+    contractAddress: process.env.SEPOLIA_CHECKOUT_CONTRACT_ADDRESS || process.env.CHECKOUT_CONTRACT_ADDRESS,
+  },
+  // Example: Add more networks here
+  // 1: {
+  //   name: "Ethereum Mainnet",
+  //   rpcUrl: process.env.MAINNET_RPC_URL,
+  //   contractAddress: process.env.MAINNET_CHECKOUT_CONTRACT_ADDRESS,
+  // },
+  // 137: {
+  //   name: "Polygon",
+  //   rpcUrl: process.env.POLYGON_RPC_URL,
+  //   contractAddress: process.env.POLYGON_CHECKOUT_CONTRACT_ADDRESS,
+  // },
+};
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -20,10 +41,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userAddress, tokenAddress, amount, nonce, deadline, signature } = req.body;
+  const { chainId, userAddress, tokenAddress, amount, nonce, deadline, signature } = req.body;
 
   console.log('═══════════════════════════════════════════════════════════');
   console.log('📝 PAYMENT PROCESSING STARTED');
+  console.log('Chain ID:          ', chainId);
   console.log('User Address:      ', userAddress);
   console.log('Token Address:     ', tokenAddress);
   console.log('Amount (wei):      ', amount);
@@ -31,11 +53,20 @@ export default async function handler(req, res) {
   console.log('Signature Length:  ', signature.length, 'chars');
 
   try {
-    const rpcUrl = process.env.RPC_URL;
-    const contractAddress = process.env.CHECKOUT_CONTRACT_ADDRESS;
+    // Check if chain is supported
+    if (!NETWORKS[chainId]) {
+      const supportedChains = Object.entries(NETWORKS)
+        .map(([id, info]) => `${info.name} (${id})`)
+        .join(", ");
+      throw new Error(`Chain ${chainId} not supported. Supported: ${supportedChains}`);
+    }
+
+    const network = NETWORKS[chainId];
+    const rpcUrl = network.rpcUrl;
+    const contractAddress = network.contractAddress;
 
     if (!rpcUrl || !contractAddress) {
-      throw new Error('Missing environment variables: RPC_URL or CHECKOUT_CONTRACT_ADDRESS');
+      throw new Error(`Missing environment variables for chain ${chainId}: RPC_URL or CHECKOUT_CONTRACT_ADDRESS`);
     }
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);

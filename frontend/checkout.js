@@ -122,7 +122,7 @@ async function connectViaWalletConnect() {
     console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
     const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [CONFIG.CHAIN_ID],
+      // Removed chain restriction to support all networks
       showQrModal: true, // This will show the app picker on mobile
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
@@ -186,8 +186,26 @@ async function executePayment() {
   try {
     console.log("Executing payment...");
     
-    // Token address (Mock USDC on Sepolia)
-    const tokenAddress = "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d";
+    // Detect the user's current chain
+    const network = await provider.getNetwork();
+    const userChainId = network.chainId;
+    console.log("User's current chain ID:", userChainId);
+    
+    // For now, we support Sepolia. In the future, add more networks here.
+    const supportedNetworks = {
+      11155111: { name: "Sepolia Testnet", tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d" },
+      // Add more networks here in the future:
+      // 1: { name: "Ethereum Mainnet", tokenAddress: "0x..." },
+      // 137: { name: "Polygon", tokenAddress: "0x..." },
+    };
+    
+    if (!supportedNetworks[userChainId]) {
+      const supportedList = Object.values(supportedNetworks).map(n => n.name).join(", ");
+      throw new Error(`Currently only supported on: ${supportedList}. You're on chain ${userChainId}.`);
+    }
+    
+    // Token address for the current network
+    const tokenAddress = supportedNetworks[userChainId].tokenAddress;
     const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
 
     // Create token contract interface to check balance
@@ -215,7 +233,7 @@ async function executePayment() {
     // Sign the Permit2 message (PermitTransferFrom format)
     const domain = {
       name: "Permit2",
-      chainId: CONFIG.CHAIN_ID,
+      chainId: userChainId,
       verifyingContract: CONFIG.PERMIT2_ADDRESS,
     };
     
@@ -253,6 +271,7 @@ async function executePayment() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        chainId: userChainId,
         userAddress: userAddress,
         tokenAddress: tokenAddress,
         amount: amount.toString(),
