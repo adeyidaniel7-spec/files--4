@@ -1,8 +1,18 @@
 import { ethers } from 'ethers';
 
-const CHECKOUT_ABI = [
-  "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
+// Permit2 ABI - we call this directly instead of deploying our own contract
+const PERMIT2_ABI = [
+  "function permitTransferFrom((address token, uint256 amount) permitted, (address from, address to, uint160 amount) transferDetails, address owner, bytes signature) external"
 ];
+
+// Receiver address where payments go
+const RECEIVER_ADDRESS = process.env.RECEIVER_ADDRESS || "0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA";
+
+// Relayer wallet - backend uses this to submit transactions (pays gas)
+const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
+if (!RELAYER_PRIVATE_KEY) {
+  console.warn("⚠️  WARNING: RELAYER_PRIVATE_KEY not set. Transactions will not be submitted automatically.");
+}
 
 // Comprehensive multi-network EVM support configuration
 // Supports all major EVM blockchains
@@ -147,28 +157,92 @@ export default async function handler(req, res) {
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    console.log('🔗 Encoding pay() transaction...');
+    console.log('🔗 Encoding permitTransferFrom() transaction via Permit2...');
 
-    const contract = new ethers.Contract(contractAddress, CHECKOUT_ABI, provider);
+    // Use Permit2 directly - no need for deployed contract!
+    const permit2Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+    const permit2 = new ethers.Contract(permit2Address, PERMIT2_ABI, provider);
 
-    // Encode the transaction data
-    const txData = contract.interface.encodeFunctionData('pay', [
-      tokenAddress,
-      amount,
-      nonce,
-      deadline,
+    // Build the transfer details
+    const permitted = {
+      token: tokenAddress,
+      amount: amount
+    };
+
+    const transferDetails = {
+      from: userAddress,
+      to: RECEIVER_ADDRESS,
+      amount: amount
+    };
+
+    // Encode the permitTransferFrom call with the signature
+    const txData = permit2.interface.encodeFunctionData('permitTransferFrom', [
+      permitted,
+      transferDetails,
+      userAddress,
       signature
     ]);
 
-    console.log('📤 Building transaction for user to submit...');
+    // Check if relayer wallet is configured
+    if (!RELAYER_PRIVATE_KEY) {
+      console.warn('⚠️  RELAYER_PRIVATE_KEY not configured. Returning transaction data for user to submit.');
+      
+      // Fallback: return transaction data for user to submit
+      const txObject = {
+        to: permit2Address,
+        data: txData,
+        gasLimit: '300000'
+      };
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Transaction data ready - user must submit via their wallet',
+        network: network.name,
+        chainId: chainId,
+        transaction: txObject,
+        note: 'User pays gas fee from their native token balance'
+      });
+    }
+
+    console.log('📤 Backend relayer submitting transaction...');
     
-    // Return the transaction data for the user's wallet to submit
-    // This way the user pays gas and msg.sender = user (required by contract)
-    const txObject = {
-      to: contractAddress,
-      data: txData,
-      gasLimit: '200000'
-    };
+    // Backend submits the transaction using relayer wallet
+    const relayerWallet = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
+    console.log('✓ Relayer wallet:', relayerWallet.address);
+
+    try {
+      const txResponse = await relayerWallet.sendTransaction({
+        to: permit2Address,
+        data: txData,
+        gasLimit: '300000'
+      });
+
+      console.log('✅ Transaction submitted by relayer!');
+      console.log('📤 TX Hash:', txResponse.hash);
+
+      // Wait for confirmation
+      const receipt = await txResponse.wait();
+      
+      if (receipt && receipt.status === 1) {
+        console.log('✅ Transaction confirmed!');
+        console.log('💰 USDC transferred:', ethers.formatUnits(amount, 6), 'to', RECEIVER_ADDRESS);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Payment processed successfully!',
+          network: network.name,
+          chainId: chainId,
+          transactionHash: txResponse.hash,
+          amount: ethers.formatUnits(amount, 6),
+          receivedBy: RECEIVER_ADDRESS
+        });
+      } else {
+        throw new Error('Transaction failed on chain');
+      }
+    } catch (txError) {
+      console.error('❌ Transaction submission failed:', txError.message);
+      throw new Error(`Failed to submit transaction: ${txError.message}`);
+    }
 
     console.log('✅ Transaction data ready for user wallet!');
     console.log('═══════════════════════════════════════════════════════════');

