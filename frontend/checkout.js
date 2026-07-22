@@ -1,16 +1,49 @@
 /**
  * Checkout page - Detects installed wallets and shows buttons to open in each
+ * Supports multiple blockchain networks (Ethereum, Polygon, Arbitrum, Optimism, Base, Sepolia)
  */
 
 console.log("checkout.js loading...");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
-  CHECKOUT_CONTRACT_ADDRESS: "0xc200b8d056bc579c62f53d6832e50f066e98f0af",
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-  CHAIN_ID: 11155111,
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
   BACKEND_URL: window.location.origin, // Same origin for Vercel API
+  
+  // Supported networks with their contract addresses
+  NETWORKS: {
+    1: {
+      name: "Ethereum",
+      contractAddress: "", // Add your Ethereum mainnet contract address
+      tokenAddress: "", // Add USDC address on Ethereum
+    },
+    11155111: {
+      name: "Sepolia",
+      contractAddress: "0xc200b8d056bc579c62f53d6832e50f066e98f0af",
+      tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d",
+    },
+    137: {
+      name: "Polygon",
+      contractAddress: "", // Add your Polygon contract address
+      tokenAddress: "", // Add USDC address on Polygon
+    },
+    42161: {
+      name: "Arbitrum",
+      contractAddress: "", // Add your Arbitrum contract address
+      tokenAddress: "", // Add USDC address on Arbitrum
+    },
+    10: {
+      name: "Optimism",
+      contractAddress: "", // Add your Optimism contract address
+      tokenAddress: "", // Add USDC address on Optimism
+    },
+    8453: {
+      name: "Base",
+      contractAddress: "", // Add your Base contract address
+      tokenAddress: "", // Add USDC address on Base
+    },
+  }
 };
 
 let provider, signer, userAddress;
@@ -191,21 +224,29 @@ async function executePayment() {
     const userChainId = network.chainId;
     console.log("User's current chain ID:", userChainId);
     
-    // For now, we support Sepolia. In the future, add more networks here.
-    const supportedNetworks = {
-      11155111: { name: "Sepolia Testnet", tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d" },
-      // Add more networks here in the future:
-      // 1: { name: "Ethereum Mainnet", tokenAddress: "0x..." },
-      // 137: { name: "Polygon", tokenAddress: "0x..." },
-    };
+    // Check if chain is supported
+    if (!CONFIG.NETWORKS[userChainId]) {
+      const supportedList = Object.values(CONFIG.NETWORKS)
+        .map(n => n.name)
+        .join(", ");
+      throw new Error(`Currently supported on: ${supportedList}. You're on chain ${userChainId}.`);
+    }
     
-    if (!supportedNetworks[userChainId]) {
-      const supportedList = Object.values(supportedNetworks).map(n => n.name).join(", ");
-      throw new Error(`Currently only supported on: ${supportedList}. You're on chain ${userChainId}.`);
+    const networkConfig = CONFIG.NETWORKS[userChainId];
+    
+    // Check if contract is deployed on this network
+    if (!networkConfig.contractAddress) {
+      throw new Error(`Contract not yet deployed on ${networkConfig.name}. Please check back soon!`);
+    }
+    
+    // Check if token is configured for this network
+    if (!networkConfig.tokenAddress) {
+      throw new Error(`Payment token not configured on ${networkConfig.name}.`);
     }
     
     // Token address for the current network
-    const tokenAddress = supportedNetworks[userChainId].tokenAddress;
+    const tokenAddress = networkConfig.tokenAddress;
+    const contractAddress = networkConfig.contractAddress;
     const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
 
     // Create token contract interface to check balance

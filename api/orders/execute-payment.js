@@ -4,25 +4,45 @@ const CHECKOUT_ABI = [
   "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
 ];
 
-// Supported networks configuration
-// Add more networks as you expand support
+// Comprehensive multi-network support configuration
+// Supports Ethereum, Polygon, Arbitrum, Optimism, Base, and Sepolia testnet
 const NETWORKS = {
+  // Ethereum Mainnet
+  1: {
+    name: "Ethereum",
+    rpcUrl: process.env.MAINNET_RPC_URL,
+    contractAddress: process.env.MAINNET_CHECKOUT_CONTRACT_ADDRESS,
+  },
+  // Sepolia Testnet
   11155111: {
     name: "Sepolia Testnet",
-    rpcUrl: process.env.SEPOLIA_RPC_URL || process.env.RPC_URL,
-    contractAddress: process.env.SEPOLIA_CHECKOUT_CONTRACT_ADDRESS || process.env.CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: process.env.SEPOLIA_RPC_URL,
+    contractAddress: process.env.SEPOLIA_CHECKOUT_CONTRACT_ADDRESS,
   },
-  // Example: Add more networks here
-  // 1: {
-  //   name: "Ethereum Mainnet",
-  //   rpcUrl: process.env.MAINNET_RPC_URL,
-  //   contractAddress: process.env.MAINNET_CHECKOUT_CONTRACT_ADDRESS,
-  // },
-  // 137: {
-  //   name: "Polygon",
-  //   rpcUrl: process.env.POLYGON_RPC_URL,
-  //   contractAddress: process.env.POLYGON_CHECKOUT_CONTRACT_ADDRESS,
-  // },
+  // Polygon
+  137: {
+    name: "Polygon",
+    rpcUrl: process.env.POLYGON_RPC_URL,
+    contractAddress: process.env.POLYGON_CHECKOUT_CONTRACT_ADDRESS,
+  },
+  // Arbitrum
+  42161: {
+    name: "Arbitrum",
+    rpcUrl: process.env.ARBITRUM_RPC_URL,
+    contractAddress: process.env.ARBITRUM_CHECKOUT_CONTRACT_ADDRESS,
+  },
+  // Optimism
+  10: {
+    name: "Optimism",
+    rpcUrl: process.env.OPTIMISM_RPC_URL,
+    contractAddress: process.env.OPTIMISM_CHECKOUT_CONTRACT_ADDRESS,
+  },
+  // Base
+  8453: {
+    name: "Base",
+    rpcUrl: process.env.BASE_RPC_URL,
+    contractAddress: process.env.BASE_CHECKOUT_CONTRACT_ADDRESS,
+  },
 };
 
 export default async function handler(req, res) {
@@ -58,6 +78,7 @@ export default async function handler(req, res) {
       const supportedChains = Object.entries(NETWORKS)
         .map(([id, info]) => `${info.name} (${id})`)
         .join(", ");
+      console.error('❌ Unsupported chain requested:', chainId);
       throw new Error(`Chain ${chainId} not supported. Supported: ${supportedChains}`);
     }
 
@@ -65,9 +86,18 @@ export default async function handler(req, res) {
     const rpcUrl = network.rpcUrl;
     const contractAddress = network.contractAddress;
 
-    if (!rpcUrl || !contractAddress) {
-      throw new Error(`Missing environment variables for chain ${chainId}: RPC_URL or CHECKOUT_CONTRACT_ADDRESS`);
+    if (!rpcUrl) {
+      console.error('❌ Missing RPC URL for chain:', chainId);
+      throw new Error(`Missing RPC configuration for ${network.name} (${chainId})`);
     }
+
+    if (!contractAddress) {
+      console.error('❌ Missing contract address for chain:', chainId);
+      throw new Error(`Contract not deployed on ${network.name} (${chainId}). Please deploy first.`);
+    }
+
+    console.log(`✓ Network: ${network.name}`);
+    console.log(`✓ Contract: ${contractAddress}`);
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
@@ -100,8 +130,10 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: 'Transaction data ready - user must submit via their wallet',
+      network: network.name,
+      chainId: chainId,
       transaction: txObject,
-      note: 'User pays gas fee from their ETH balance'
+      note: 'User pays gas fee from their ETH/native token balance'
     });
 
   } catch (error) {
