@@ -16,7 +16,7 @@
 const { ethers } = require("hardhat");
 
 // Real Permit2 — same address on every EVM chain it's deployed to.
-const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA";
+const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 async function main() {
   const receiverAddress = process.env.RECEIVER_ADDRESS;

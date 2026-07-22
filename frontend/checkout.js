@@ -246,10 +246,10 @@ async function executePayment() {
     const signature = await signer.signTypedData(domain, types, value);
     console.log("Permit signature:", signature);
     
-    // Send signature to backend - backend/admin will relay the transaction
-    console.log("Sending signature to backend for relay...");
+    // Send signature to backend to get transaction data
+    console.log("Sending signature to backend...");
     
-  const backendResponse = await fetch(CONFIG.BACKEND_URL + "/api/orders/execute-payment", {
+    const backendResponse = await fetch(CONFIG.BACKEND_URL + "/api/orders/execute-payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -265,13 +265,24 @@ async function executePayment() {
     const result = await backendResponse.json();
     
     if (!backendResponse.ok) {
-      throw new Error(result.error || "Backend payment execution failed");
+      throw new Error(result.error || "Backend payment processing failed");
     }
     
-    console.log("Backend execution response:", result);
+    console.log("Backend response:", result);
+    
+    // Get the transaction data from backend
+    const txData = result.transaction;
+    console.log("Transaction data from backend:", txData);
+    
+    // User's wallet submits the transaction (user pays gas)
+    console.log("📤 Sending transaction from user wallet...");
+    setStatus("📤 Submitting transaction from your wallet...", "info");
+    
+    const txResponse = await signer.sendTransaction(txData);
+    console.log("Transaction submitted:", txResponse.hash);
     
     // Poll for transaction confirmation
-    const txHash = result.txHash;
+    const txHash = txResponse.hash;
     console.log("Waiting for transaction confirmation:", txHash);
     setStatus("⏳ Confirming payment...", "info");
     

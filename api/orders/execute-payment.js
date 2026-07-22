@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
 const CHECKOUT_ABI = [
-  "function payFromRelayer(address owner, address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
+  "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
 ];
 
 export default async function handler(req, res) {
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const { userAddress, tokenAddress, amount, nonce, deadline, signature } = req.body;
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('📝 GASLESS PAYMENT RELAYING STARTED');
+  console.log('📝 PAYMENT PROCESSING STARTED');
   console.log('User Address:      ', userAddress);
   console.log('Token Address:     ', tokenAddress);
   console.log('Amount (wei):      ', amount);
@@ -31,49 +31,50 @@ export default async function handler(req, res) {
   console.log('Signature Length:  ', signature.length, 'chars');
 
   try {
-    const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY;
     const rpcUrl = process.env.RPC_URL;
     const contractAddress = process.env.CHECKOUT_CONTRACT_ADDRESS;
 
-    if (!adminPrivateKey || !rpcUrl || !contractAddress) {
-      throw new Error('Missing environment variables: ADMIN_PRIVATE_KEY, RPC_URL, or CHECKOUT_CONTRACT_ADDRESS');
+    if (!rpcUrl || !contractAddress) {
+      throw new Error('Missing environment variables: RPC_URL or CHECKOUT_CONTRACT_ADDRESS');
     }
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
 
-    console.log('⛽ Admin wallet paying gas: ', adminWallet.address);
-    console.log('🔗 Encoding payFromRelayer transaction...');
+    console.log('🔗 Encoding pay() transaction...');
 
-    const contract = new ethers.Contract(contractAddress, CHECKOUT_ABI, adminWallet);
+    const contract = new ethers.Contract(contractAddress, CHECKOUT_ABI, provider);
 
-    console.log('📤 Sending transaction via payFromRelayer...');
-    const tx = await contract.payFromRelayer(
-      userAddress,
+    // Encode the transaction data
+    const txData = contract.interface.encodeFunctionData('pay', [
       tokenAddress,
       amount,
       nonce,
       deadline,
-      signature,
-      {
-        gasLimit: 200000,
-      }
-    );
+      signature
+    ]);
 
-    console.log('✅ Transaction sent successfully!');
-    console.log('Transaction Hash:  ', tx.hash);
+    console.log('📤 Building transaction for user to submit...');
+    
+    // Return the transaction data for the user's wallet to submit
+    // This way the user pays gas and msg.sender = user (required by contract)
+    const txObject = {
+      to: contractAddress,
+      data: txData,
+      gasLimit: '200000'
+    };
+
+    console.log('✅ Transaction data ready for user wallet!');
     console.log('═══════════════════════════════════════════════════════════');
 
     return res.status(200).json({
       success: true,
-      txHash: tx.hash,
-      message: 'Payment relayed successfully (admin paid gas)',
-      adminWallet: adminWallet.address,
-      userAddress: userAddress
+      message: 'Transaction data ready - user must submit via their wallet',
+      transaction: txObject,
+      note: 'User pays gas fee from their ETH balance'
     });
 
   } catch (error) {
-    console.error('❌ Payment relay error:', error.message);
+    console.error('❌ Payment processing error:', error.message);
     console.log('═══════════════════════════════════════════════════════════');
     return res.status(400).json({
       success: false,
