@@ -1,4 +1,4 @@
-require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-toolchain");
 require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -20,11 +20,16 @@ module.exports = {
       url: process.env.SEPOLIA_RPC_URL || "",
       accounts: process.env.ADMIN_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY ? [process.env.ADMIN_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY] : [],
     },
-    // Mainnets
+    // Mainnets - Layer 1
     mainnet: {
       url: process.env.MAINNET_RPC_URL || "",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
     },
+    bsc: {
+      url: process.env.BSC_RPC_URL || "",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
+    },
+    // Mainnets - Layer 2
     polygon: {
       url: process.env.POLYGON_RPC_URL || "",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
@@ -39,6 +44,14 @@ module.exports = {
     },
     base: {
       url: process.env.BASE_RPC_URL || "",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
+    },
+    linea: {
+      url: process.env.LINEA_RPC_URL || "",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
+    },
+    monad: {
+      url: process.env.MONAD_RPC_URL || "",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
     },
   },

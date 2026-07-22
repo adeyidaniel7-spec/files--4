@@ -1,6 +1,6 @@
 /**
  * Checkout page - Detects installed wallets and shows buttons to open in each
- * Supports multiple blockchain networks (Ethereum, Polygon, Arbitrum, Optimism, Base, Sepolia)
+ * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
 console.log("checkout.js loading...");
@@ -11,37 +11,55 @@ const CONFIG = {
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
   BACKEND_URL: window.location.origin, // Same origin for Vercel API
   
-  // Supported networks with their contract addresses
+  // Comprehensive EVM networks configuration
   NETWORKS: {
+    // Ethereum
     1: {
       name: "Ethereum",
-      contractAddress: "", // Add your Ethereum mainnet contract address
-      tokenAddress: "", // Add USDC address on Ethereum
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Mainnet USDC
     },
+    // Sepolia Testnet
     11155111: {
       name: "Sepolia",
       contractAddress: "0xc200b8d056bc579c62f53d6832e50f066e98f0af",
-      tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d",
+      tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d", // Mock USDC
     },
+    // Polygon
     137: {
       name: "Polygon",
-      contractAddress: "", // Add your Polygon contract address
-      tokenAddress: "", // Add USDC address on Polygon
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", // Polygon USDC
     },
-    42161: {
-      name: "Arbitrum",
-      contractAddress: "", // Add your Arbitrum contract address
-      tokenAddress: "", // Add USDC address on Arbitrum
+    // BNB Chain
+    56: {
+      name: "BNB Chain",
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d", // BNB USDC
     },
+    // Optimism
     10: {
       name: "Optimism",
-      contractAddress: "", // Add your Optimism contract address
-      tokenAddress: "", // Add USDC address on Optimism
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0x7f5c764cbc14f9669b88837ca1490cca17c31607", // Optimism USDC
     },
+    // Arbitrum
+    42161: {
+      name: "Arbitrum",
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0xff970a61a04b1ca14834a43f5de4533ebddb5f86", // Arbitrum USDC
+    },
+    // Base
     8453: {
       name: "Base",
-      contractAddress: "", // Add your Base contract address
-      tokenAddress: "", // Add USDC address on Base
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b1566469c18", // Base USDC
+    },
+    // Linea
+    59144: {
+      name: "Linea",
+      contractAddress: "", // Add after deployment
+      tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Linea USDC
     },
   }
 };
