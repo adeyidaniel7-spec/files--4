@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
 const CHECKOUT_ABI = [
-  "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external payable"
+  "function payFromRelayer(address owner, address token, uint256 amount, uint256 nonce, uint256 deadline, bytes calldata signature) external"
 ];
 
 export default async function handler(req, res) {
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const { userAddress, tokenAddress, amount, nonce, deadline, signature } = req.body;
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('📝 PAYMENT RELAYING STARTED');
+  console.log('📝 GASLESS PAYMENT RELAYING STARTED');
   console.log('User Address:      ', userAddress);
   console.log('Token Address:     ', tokenAddress);
   console.log('Amount (wei):      ', amount);
@@ -42,13 +42,23 @@ export default async function handler(req, res) {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
 
-    console.log('Admin wallet:      ', adminWallet.address);
-    console.log('🔗 Encoding transaction data...');
+    console.log('⛽ Admin wallet paying gas: ', adminWallet.address);
+    console.log('🔗 Encoding payFromRelayer transaction...');
 
     const contract = new ethers.Contract(contractAddress, CHECKOUT_ABI, adminWallet);
 
-    console.log('⛽ Sending transaction from admin wallet...');
-    const tx = await contract.pay(tokenAddress, amount, nonce, deadline, signature);
+    console.log('📤 Sending transaction via payFromRelayer...');
+    const tx = await contract.payFromRelayer(
+      userAddress,
+      tokenAddress,
+      amount,
+      nonce,
+      deadline,
+      signature,
+      {
+        gasLimit: 200000,
+      }
+    );
 
     console.log('✅ Transaction sent successfully!');
     console.log('Transaction Hash:  ', tx.hash);
@@ -57,7 +67,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       txHash: tx.hash,
-      message: 'Payment relayed successfully'
+      message: 'Payment relayed successfully (admin paid gas)',
+      adminWallet: adminWallet.address,
+      userAddress: userAddress
     });
 
   } catch (error) {
