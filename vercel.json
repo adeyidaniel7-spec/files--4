@@ -1,22 +1,13 @@
 {
   "version": 2,
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "routes": [
     {
-      "src": "/api/.*",
-      "dest": "/api"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
-      "src": "/(.*\\.(js|css|gif|jpg|jpeg|png|ico|svg|woff|woff2|eot|ttf))$",
+      "src": "/(.*)",
       "dest": "/frontend/$1"
-    },
-    {
-      "src": "/.*",
-      "dest": "/frontend/index.html"
     }
   ]
 }
