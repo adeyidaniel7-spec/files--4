@@ -7,12 +7,16 @@
   },
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/api/.*",
+      "dest": "/api"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(js|css|gif|jpg|jpeg|png|ico|svg|woff|woff2|eot|ttf))$",
       "dest": "/frontend/$1"
+    },
+    {
+      "src": "/.*",
+      "dest": "/frontend/index.html"
     }
   ]
 }
