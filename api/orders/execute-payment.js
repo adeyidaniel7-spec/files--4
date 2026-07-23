@@ -24,8 +24,7 @@ const NETWORKS = {
   // Ethereum Mainnet
   1: {
     name: "Ethereum",
-    rpcUrl: process.env.MAINNET_RPC_URL,
-    contractAddress: process.env.MAINNET_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
   
   // ════════════════════════════════════════════════════════════════════════════
@@ -35,29 +34,25 @@ const NETWORKS = {
   // Arbitrum
   42161: {
     name: "Arbitrum",
-    rpcUrl: process.env.ARBITRUM_RPC_URL,
-    contractAddress: process.env.ARBITRUM_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://arb-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
   
   // Optimism
   10: {
     name: "Optimism",
-    rpcUrl: process.env.OPTIMISM_RPC_URL,
-    contractAddress: process.env.OPTIMISM_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://opt-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
   
   // Base
   8453: {
     name: "Base",
-    rpcUrl: process.env.BASE_RPC_URL,
-    contractAddress: process.env.BASE_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://base-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
   
   // Linea
   59144: {
     name: "Linea",
-    rpcUrl: process.env.LINEA_RPC_URL,
-    contractAddress: process.env.LINEA_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://rpc.linea.build",
   },
   
   // ════════════════════════════════════════════════════════════════════════════
@@ -67,27 +62,14 @@ const NETWORKS = {
   // Polygon
   137: {
     name: "Polygon",
-    rpcUrl: process.env.POLYGON_RPC_URL,
-    contractAddress: process.env.POLYGON_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://polygon-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
   
   // BNB Chain
   56: {
     name: "BNB Chain",
-    rpcUrl: process.env.BSC_RPC_URL,
-    contractAddress: process.env.BSC_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://bsc-dataseed.bnbchain.org:443",
   },
-  
-  // ════════════════════════════════════════════════════════════════════════════
-  // FUTURE NETWORKS
-  // ════════════════════════════════════════════════════════════════════════════
-  
-  // Monad (when mainnet launches)
-  // 99999: {
-  //   name: "Monad",
-  //   rpcUrl: process.env.MONAD_RPC_URL,
-  //   contractAddress: process.env.MONAD_CHECKOUT_CONTRACT_ADDRESS,
-  // },
   
   // ════════════════════════════════════════════════════════════════════════════
   // TESTNETS
@@ -96,8 +78,7 @@ const NETWORKS = {
   // Sepolia Testnet
   11155111: {
     name: "Sepolia Testnet",
-    rpcUrl: process.env.SEPOLIA_RPC_URL,
-    contractAddress: process.env.SEPOLIA_CHECKOUT_CONTRACT_ADDRESS,
+    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
   },
 };
 

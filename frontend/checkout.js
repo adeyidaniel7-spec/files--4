@@ -14,14 +14,14 @@ const CONFIG = {
   
   // RPC URLs for WalletConnect - hardcoded for browser
   RPC_URLS: {
-    1: "https://eth-mainnet.g.alchemy.com/v2/alchApiKey",
-    137: "https://polygon-mainnet.g.alchemy.com/v2/alchApiKey",
-    42161: "https://arb-mainnet.g.alchemy.com/v2/alchApiKey",
-    10: "https://opt-mainnet.g.alchemy.com/v2/alchApiKey",
-    8453: "https://base-mainnet.g.alchemy.com/v2/alchApiKey",
+    1: "https://eth-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
+    137: "https://polygon-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
+    42161: "https://arb-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
+    10: "https://opt-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
+    8453: "https://base-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
     56: "https://bsc-dataseed.bnbchain.org:443",
     59144: "https://rpc.linea.build",
-    11155111: "https://eth-sepolia.g.alchemy.com/v2/alchApiKey"
+    11155111: "https://eth-sepolia.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N"
   },
   
   // Comprehensive EVM networks configuration
