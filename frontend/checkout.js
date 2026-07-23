@@ -210,17 +210,9 @@ function showWalletSelector() {
     return;
   }
   
-  // Wait a moment and check again (MetaMask might still be loading)
-  console.log("window.ethereum not found yet, waiting 1 second...");
-  setTimeout(() => {
-    if (typeof window.ethereum !== 'undefined') {
-      console.log("✓ window.ethereum detected on retry, using native provider");
-      connectViaInjectedProvider();
-      return;
-    }
-    console.log("No native provider detected after retry");
-    setStatus("Please install MetaMask or use a wallet-enabled browser", "error");
-  }, 1000);
+  // If no native provider, use WalletConnect
+  console.log("No native provider detected, initializing WalletConnect...");
+  connectViaWalletConnect();
 }
 
 async function connectViaInjectedProvider() {
@@ -303,6 +295,7 @@ async function connectViaWalletConnect() {
     
   } catch (err) {
     console.error("WalletConnect error:", err);
+    console.error("Error details:", err.message, err.stack);
     setStatus("Error connecting wallet: " + err.message, "error");
   }
 }
