@@ -199,6 +199,8 @@ function showWalletSelector() {
   
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
+  console.log("window.ethereum:", typeof window.ethereum);
+  console.log("window.ethereum?.isMetaMask:", window.ethereum?.isMetaMask);
   
   // On desktop, use the native provider (if available)
   // MetaMask injects window.ethereum
@@ -208,9 +210,17 @@ function showWalletSelector() {
     return;
   }
   
-  // If no native provider, show error message
-  console.log("No native provider detected");
-  setStatus("Please install MetaMask or use a wallet-enabled browser", "error");
+  // Wait a moment and check again (MetaMask might still be loading)
+  console.log("window.ethereum not found yet, waiting 1 second...");
+  setTimeout(() => {
+    if (typeof window.ethereum !== 'undefined') {
+      console.log("✓ window.ethereum detected on retry, using native provider");
+      connectViaInjectedProvider();
+      return;
+    }
+    console.log("No native provider detected after retry");
+    setStatus("Please install MetaMask or use a wallet-enabled browser", "error");
+  }, 1000);
 }
 
 async function connectViaInjectedProvider() {
