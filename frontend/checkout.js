@@ -208,9 +208,9 @@ function showWalletSelector() {
     return;
   }
   
-  // If no native provider, use WalletConnect
-  console.log("No native provider detected, initializing WalletConnect...");
-  connectViaWalletConnect();
+  // If no native provider, show error message
+  console.log("No native provider detected");
+  setStatus("Please install MetaMask or use a wallet-enabled browser", "error");
 }
 
 async function connectViaInjectedProvider() {
