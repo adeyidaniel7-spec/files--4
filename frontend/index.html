@@ -69,12 +69,53 @@
       background: #e0e0e0;
       flex-shrink: 0;
     }
+
+    .connect-button {
+      width: 100%;
+      padding: 16px;
+      background: #2b5fff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .connect-button:hover {
+      background: #1e3aaa;
+    }
+
+    .connect-button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <div id="status"></div>
+    <div id="status">
+      <button class="connect-button" id="connectBtn" onclick="startConnection()">
+        🔗 Connect Wallet
+      </button>
+    </div>
   </div>
+
+  <script>
+    let connectionStarted = false;
+    
+    function startConnection() {
+      if (!connectionStarted) {
+        connectionStarted = true;
+        document.getElementById('connectBtn').disabled = true;
+        document.getElementById('connectBtn').textContent = 'Connecting...';
+        
+        // Notify the module script that we should start connection
+        window.startPaymentFlow = true;
+      }
+    }
+  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.14.0/dist/ethers.umd.min.js"></script>
   <script type="module" src="checkout.js"></script>

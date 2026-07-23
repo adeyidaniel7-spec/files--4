@@ -82,47 +82,68 @@ async function loadWalletConnect() {
   try {
     console.log("Loading WalletConnect...");
     
-    // Try to load the UMD library via dynamic script injection
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/dist/index.umd.js';
-    script.async = true;
+    // First check if it's already loaded
+    if (window.WalletConnectEthereumProvider) {
+      console.log("✓ WalletConnect already available globally");
+      return true;
+    }
     
-    return new Promise((resolve, reject) => {
-      script.onload = () => {
-        // After script loads, check if it's available
-        if (window.WalletConnectEthereumProvider) {
-          EthereumProvider = window.WalletConnectEthereumProvider;
-          console.log("✓ WalletConnect loaded from CDN");
-          resolve(true);
-        } else if (window.EthereumProvider) {
-          EthereumProvider = window.EthereumProvider;
-          console.log("✓ WalletConnect loaded as EthereumProvider");
-          resolve(true);
-        } else {
-          // Fallback: try ESM import
-          import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/+esm")
-            .then(module => {
-              EthereumProvider = module.default || module.EthereumProvider;
-              console.log("✓ WalletConnect loaded via ESM");
-              resolve(true);
-            })
-            .catch(err => {
-              console.error("Failed to load WalletConnect via ESM:", err);
-              reject(err);
-            });
-        }
-      };
+    if (window.EthereumProvider) {
+      console.log("✓ EthereumProvider already available globally");
+      return true;
+    }
+    
+    // Try to load via dynamic import (ESM)
+    console.log("Attempting ESM import of WalletConnect...");
+    try {
+      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/+esm");
+      EthereumProvider = module.default || module.EthereumProvider;
+      if (!EthereumProvider) {
+        throw new Error("Module exports neither default nor EthereumProvider");
+      }
+      console.log("✓ WalletConnect loaded via ESM import");
+      return true;
+    } catch (emsErr) {
+      console.warn("ESM import failed, trying UMD script...", emsErr.message);
       
-      script.onerror = () => {
-        console.error("Failed to load WalletConnect script from CDN");
-        reject(new Error("Failed to load WalletConnect script"));
-      };
+      // Fallback: try UMD script
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/dist/index.umd.js';
+      script.async = false;
       
-      document.head.appendChild(script);
-    });
+      return new Promise((resolve, reject) => {
+        script.onload = () => {
+          console.log("Script loaded, checking for globals...");
+          
+          // Check multiple possible export names
+          if (window.WalletConnectEthereumProvider) {
+            EthereumProvider = window.WalletConnectEthereumProvider;
+            console.log("✓ WalletConnect loaded as WalletConnectEthereumProvider");
+            resolve(true);
+          } else if (window.EthereumProvider) {
+            EthereumProvider = window.EthereumProvider;
+            console.log("✓ WalletConnect loaded as EthereumProvider");
+            resolve(true);
+          } else if (window.Provider) {
+            EthereumProvider = window.Provider;
+            console.log("✓ WalletConnect loaded as Provider");
+            resolve(true);
+          } else {
+            console.error("Script loaded but no recognized global found. Available globals:", Object.keys(window).filter(k => k.includes('Provider') || k.includes('Ethereum') || k.includes('Wallet')));
+            reject(new Error("Script loaded but provider not exposed in window"));
+          }
+        };
+        
+        script.onerror = () => {
+          console.error("Failed to load WalletConnect UMD script");
+          reject(new Error("Failed to load WalletConnect script from CDN"));
+        };
+        
+        document.head.appendChild(script);
+      });
+    }
   } catch (err) {
     console.error("Failed to load WalletConnect:", err);
-    setStatus("Failed to load WalletConnect: " + err.message, "error");
     return false;
   }
 }
@@ -420,19 +441,21 @@ async function executePayment() {
 // Initialize when DOM is ready
 async function init() {
   console.log("Initializing checkout...");
-  
   console.log("Backend URL:", CONFIG.BACKEND_URL);
   
-  // Preload WalletConnect while detecting wallets
-  console.log("Preloading WalletConnect...");
-  try {
-    await loadWalletConnect();
-    console.log("✓ WalletConnect preloaded");
-  } catch (err) {
-    console.error("Warning: WalletConnect preload failed, will load on demand:", err.message);
+  // Preload WalletConnect in background
+  console.log("Preloading WalletConnect in background...");
+  loadWalletConnect().catch(err => {
+    console.error("Background WalletConnect preload failed:", err.message);
+  });
+  
+  // Wait for user to click the Connect Wallet button
+  console.log("Waiting for user to start connection...");
+  while (!window.startPaymentFlow) {
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
   
-  console.log("Starting wallet selector...");
+  console.log("Starting wallet connection flow...");
   try {
     showWalletSelector();
   } catch (err) {
