@@ -140,20 +140,14 @@ export default async function handler(req, res) {
 
     const network = NETWORKS[chainId];
     const rpcUrl = network.rpcUrl;
-    const contractAddress = network.contractAddress;
 
     if (!rpcUrl) {
       console.error('❌ Missing RPC URL for chain:', chainId);
       throw new Error(`Missing RPC configuration for ${network.name} (${chainId})`);
     }
 
-    if (!contractAddress) {
-      console.error('❌ Missing contract address for chain:', chainId);
-      throw new Error(`Contract not deployed on ${network.name} (${chainId}). Please deploy first.`);
-    }
-
     console.log(`✓ Network: ${network.name}`);
-    console.log(`✓ Contract: ${contractAddress}`);
+    console.log(`✓ Receiver: ${RECEIVER_ADDRESS}`);
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
