@@ -247,14 +247,22 @@ async function connectViaWalletConnect() {
     console.log("Initializing EthereumProvider with config...");
     
     // Initialize WalletConnect provider
+    // Key: disablexplorerredirect=false allows deeplinks even if relay fails
     const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
       chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       showQrModal: true,
+      disableExplorerRedirect: false, // Allow deeplinks to wallets
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
       rpcMap: CONFIG.RPC_URLS,
+      metadata: {
+        name: "Checkout",
+        description: "Multi-chain USDC Payment via Permit2",
+        url: window.location.origin,
+        icons: []
+      }
     });
     console.log("✓ EthereumProvider initialized");
     
@@ -275,14 +283,9 @@ async function connectViaWalletConnect() {
     
     showAccountInfo();
   } catch (err) {
-    // If error is relay-related, silently fail - WalletConnect will show its own UI
-    if (err.message && (err.message.includes("WebSocket") || err.message.includes("relay"))) {
-      console.log("⚠️ Relay connection issue (environmental), WalletConnect handling UI");
-      return;
-    }
-    
-    // For other errors, log them
     console.error("❌ WalletConnect error:", err.message);
+    // Let WalletConnect handle its own UI
+    // If relay fails, it will show QR code via deeplinks
   }
 }
 
