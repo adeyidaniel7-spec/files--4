@@ -449,12 +449,7 @@ async function init() {
     console.error("Background WalletConnect preload failed:", err.message);
   });
   
-  // Wait for user to click the Connect Wallet button
-  console.log("Waiting for user to start connection...");
-  while (!window.startPaymentFlow) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  
+  // Auto-start wallet connection immediately
   console.log("Starting wallet connection flow...");
   try {
     showWalletSelector();
