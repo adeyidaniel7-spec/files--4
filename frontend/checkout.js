@@ -81,12 +81,18 @@ const el = {
 async function loadWalletConnect() {
   try {
     console.log("Loading WalletConnect...");
-    const module = await import("https://esm.sh/@walletconnect/ethereum-provider@2.17.0");
-    EthereumProvider = module.EthereumProvider;
-    console.log("✓ WalletConnect loaded");
-    return true;
+    // WalletConnect is now loaded via CDN in index.html
+    if (typeof WalletConnectEthereumProvider !== 'undefined') {
+      EthereumProvider = WalletConnectEthereumProvider;
+      console.log("✓ WalletConnect loaded from CDN");
+      return true;
+    }
+    
+    console.error("WalletConnect not available on window");
+    throw new Error("WalletConnect library not loaded");
   } catch (err) {
     console.error("Failed to load WalletConnect:", err);
+    setStatus("Failed to load WalletConnect: " + err.message, "error");
     return false;
   }
 }
@@ -203,8 +209,9 @@ async function connectViaWalletConnect() {
     await wcProvider.connect();
     console.log("✓ WalletConnect connected");
     
-    provider = new ethers.providers.Web3Provider(wcProvider);
-    signer = provider.getSigner();
+    // Use ethers v6 BrowserProvider instead of v5 Web3Provider
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer = await provider.getSigner();
     userAddress = await signer.getAddress();
     
     console.log("Connected wallet address:", userAddress);
