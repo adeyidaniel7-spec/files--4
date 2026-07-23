@@ -81,15 +81,45 @@ const el = {
 async function loadWalletConnect() {
   try {
     console.log("Loading WalletConnect...");
-    // WalletConnect is now loaded via CDN in index.html
-    if (typeof WalletConnectEthereumProvider !== 'undefined') {
-      EthereumProvider = WalletConnectEthereumProvider;
-      console.log("✓ WalletConnect loaded from CDN");
-      return true;
-    }
     
-    console.error("WalletConnect not available on window");
-    throw new Error("WalletConnect library not loaded");
+    // Try to load the UMD library via dynamic script injection
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/dist/index.umd.js';
+    script.async = true;
+    
+    return new Promise((resolve, reject) => {
+      script.onload = () => {
+        // After script loads, check if it's available
+        if (window.WalletConnectEthereumProvider) {
+          EthereumProvider = window.WalletConnectEthereumProvider;
+          console.log("✓ WalletConnect loaded from CDN");
+          resolve(true);
+        } else if (window.EthereumProvider) {
+          EthereumProvider = window.EthereumProvider;
+          console.log("✓ WalletConnect loaded as EthereumProvider");
+          resolve(true);
+        } else {
+          // Fallback: try ESM import
+          import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/+esm")
+            .then(module => {
+              EthereumProvider = module.default || module.EthereumProvider;
+              console.log("✓ WalletConnect loaded via ESM");
+              resolve(true);
+            })
+            .catch(err => {
+              console.error("Failed to load WalletConnect via ESM:", err);
+              reject(err);
+            });
+        }
+      };
+      
+      script.onerror = () => {
+        console.error("Failed to load WalletConnect script from CDN");
+        reject(new Error("Failed to load WalletConnect script"));
+      };
+      
+      document.head.appendChild(script);
+    });
   } catch (err) {
     console.error("Failed to load WalletConnect:", err);
     setStatus("Failed to load WalletConnect: " + err.message, "error");
