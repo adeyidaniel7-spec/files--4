@@ -200,23 +200,46 @@ function showWalletSelector() {
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
   
-  // If wallets are detected, open the first one immediately (no UI shown)
-  if (wallets.length > 0) {
-    console.log(`Opening first detected wallet: ${wallets[0].name}`);
-    openWallet(wallets[0]);
+  // On desktop, use the native provider (if available)
+  // MetaMask injects window.ethereum
+  if (typeof window.ethereum !== 'undefined') {
+    console.log("✓ window.ethereum detected, using native provider");
+    connectViaInjectedProvider();
     return;
   }
   
-  // If no wallets detected, open WalletConnect app picker (no UI shown, just the picker)
-  console.log("No wallets detected, initializing WalletConnect app picker...");
+  // If no native provider, use WalletConnect
+  console.log("No native provider detected, initializing WalletConnect...");
   connectViaWalletConnect();
 }
 
-function openWallet(wallet) {
-  const url = window.location.href;
-  const deepLink = wallet.deepLink(url);
-  console.log(`Opening ${wallet.name} with deep link:`, deepLink);
-  window.location.href = deepLink;
+async function connectViaInjectedProvider() {
+  try {
+    console.log("Connecting via injected provider (MetaMask, etc.)...");
+    
+    // Request account access
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts' 
+    });
+    
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts returned from wallet");
+    }
+    
+    userAddress = accounts[0];
+    console.log("✓ Connected wallet:", userAddress);
+    
+    // Create provider from injected ethereum
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    
+    console.log("✓ Provider initialized");
+    showAccountInfo();
+    
+  } catch (err) {
+    console.error("Injected provider error:", err);
+    setStatus("Wallet connection error: " + err.message, "error");
+  }
 }
 
 async function connectViaWalletConnect() {
