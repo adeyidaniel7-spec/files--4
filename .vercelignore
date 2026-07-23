@@ -9,6 +9,13 @@ contracts
 hardhat.config.js
 deploy.js
 *.test.js
+*.fork.test.js
+check_balance.js
+checkoutBackend.js
+checkoutPermit2Signing.js
+checkoutRelayer.js
+app.js
+app.js.bak
 alchemy-demo
 scripts
 SETUP.md
