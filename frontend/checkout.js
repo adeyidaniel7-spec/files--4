@@ -235,47 +235,35 @@ async function connectViaInjectedProvider() {
 }
 
 async function connectViaWalletConnect() {
-  try {
-    // Ensure WalletConnect is loaded
-    if (!EthereumProvider) {
-      const loaded = await loadWalletConnect();
-      if (!loaded) {
-        throw new Error("Failed to load WalletConnect");
-      }
+  // Ensure WalletConnect is loaded
+  if (!EthereumProvider) {
+    const loaded = await loadWalletConnect();
+    if (!loaded) {
+      console.error("Failed to load WalletConnect");
+      return;
     }
-    
-    const wcProvider = await EthereumProvider.init({
-      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      showQrModal: true,
-      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-      events: ["chainChanged", "accountsChanged"],
-      rpcMap: CONFIG.RPC_URLS
-    });
-    
-    // Connect - this will show the modal
-    await wcProvider.connect();
-    
-    // Use ethers v6 BrowserProvider
-    provider = new ethers.BrowserProvider(wcProvider);
-    signer = await provider.getSigner();
-    userAddress = await signer.getAddress();
-    
-    console.log("Connected wallet address:", userAddress);
-    showAccountInfo();
-    
-  } catch (err) {
-    console.error("WalletConnect error:", err);
-    let errorMsg = err.message;
-    if (errorMsg.includes("WebSocket") || errorMsg.includes("relay")) {
-      errorMsg = "Network error - please try again";
-    } else if (errorMsg.includes("timeout")) {
-      errorMsg = "Connection timeout - please try again";
-    }
-    
-    setStatus("❌ " + errorMsg, "error");
   }
+  
+  const wcProvider = await EthereumProvider.init({
+    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+    chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+    optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+    showQrModal: true,
+    methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+    events: ["chainChanged", "accountsChanged"],
+    rpcMap: CONFIG.RPC_URLS
+  });
+  
+  // Connect - this will show the modal
+  await wcProvider.connect();
+  
+  // Use ethers v6 BrowserProvider
+  provider = new ethers.BrowserProvider(wcProvider);
+  signer = await provider.getSigner();
+  userAddress = await signer.getAddress();
+  
+  console.log("Connected wallet address:", userAddress);
+  showAccountInfo();
 }
 
 function showAccountInfo() {
