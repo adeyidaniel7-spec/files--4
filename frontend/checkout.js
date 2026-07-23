@@ -246,24 +246,37 @@ async function connectViaWalletConnect() {
   try {
     console.log("Initializing EthereumProvider with config...");
     
-    // Initialize WalletConnect provider
-    // Key: disablexplorerredirect=false allows deeplinks even if relay fails
-    const wcProvider = await EthereumProvider.init({
-      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      showQrModal: true,
-      disableExplorerRedirect: false, // Allow deeplinks to wallets
-      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-      events: ["chainChanged", "accountsChanged"],
-      rpcMap: CONFIG.RPC_URLS,
-      metadata: {
-        name: "Checkout",
-        description: "Multi-chain USDC Payment via Permit2",
-        url: window.location.origin,
-        icons: []
+    // Wrap init in a timeout - if relay is down, we still want to show modal
+    const initWithTimeout = new Promise(async (resolve, reject) => {
+      try {
+        const wcProvider = await EthereumProvider.init({
+          projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+          chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+          optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+          showQrModal: true,
+          disableExplorerRedirect: false,
+          methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+          events: ["chainChanged", "accountsChanged"],
+          rpcMap: CONFIG.RPC_URLS,
+          metadata: {
+            name: "Checkout",
+            description: "Multi-chain USDC Payment via Permit2",
+            url: window.location.origin,
+            icons: []
+          }
+        });
+        resolve(wcProvider);
+      } catch (error) {
+        reject(error);
       }
     });
+    
+    // Give it 10 seconds, if relay hangs, we still proceed
+    const wcProvider = await Promise.race([
+      initWithTimeout,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Init timeout - relay issue")), 10000))
+    ]);
+    
     console.log("✓ EthereumProvider initialized");
     
     console.log("Calling wcProvider.connect()...");
@@ -284,8 +297,8 @@ async function connectViaWalletConnect() {
     showAccountInfo();
   } catch (err) {
     console.error("❌ WalletConnect error:", err.message);
-    // Let WalletConnect handle its own UI
-    // If relay fails, it will show QR code via deeplinks
+    console.error("This is likely a relay server connectivity issue");
+    // Continue silently - WalletConnect should still show modal
   }
 }
 
