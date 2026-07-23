@@ -266,7 +266,7 @@ async function executePayment() {
     
     // Detect the user's current chain
     const network = await provider.getNetwork();
-    const userChainId = network.chainId;
+    const userChainId = Number(network.chainId); // Convert BigInt to number for v6
     console.log("User's current chain ID:", userChainId);
     
     // Check if chain is supported
@@ -383,6 +383,7 @@ async function executePayment() {
     
   } catch (err) {
     console.error("Payment execution error:", err);
+    setStatus("Payment error: " + err.message, "error");
   }
 }
 

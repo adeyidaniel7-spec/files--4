@@ -185,51 +185,34 @@ export default async function handler(req, res) {
     const relayerWallet = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
     console.log('✓ Relayer wallet:', relayerWallet.address);
 
-    try {
-      const txResponse = await relayerWallet.sendTransaction({
-        to: permit2Address,
-        data: txData,
-        gasLimit: '300000'
-      });
-
-      console.log('✅ Transaction submitted by relayer!');
-      console.log('📤 TX Hash:', txResponse.hash);
-
-      // Wait for confirmation
-      const receipt = await txResponse.wait();
-      
-      if (receipt && receipt.status === 1) {
-        console.log('✅ Transaction confirmed!');
-        console.log('💰 USDC transferred:', ethers.formatUnits(amount, 6), 'to', RECEIVER_ADDRESS);
-        
-        return res.status(200).json({
-          success: true,
-          message: 'Payment processed successfully!',
-          network: network.name,
-          chainId: chainId,
-          transactionHash: txResponse.hash,
-          amount: ethers.formatUnits(amount, 6),
-          receivedBy: RECEIVER_ADDRESS
-        });
-      } else {
-        throw new Error('Transaction failed on chain');
-      }
-    } catch (txError) {
-      console.error('❌ Transaction submission failed:', txError.message);
-      throw new Error(`Failed to submit transaction: ${txError.message}`);
-    }
-
-    console.log('✅ Transaction data ready for user wallet!');
-    console.log('═══════════════════════════════════════════════════════════');
-
-    return res.status(200).json({
-      success: true,
-      message: 'Transaction data ready - user must submit via their wallet',
-      network: network.name,
-      chainId: chainId,
-      transaction: txObject,
-      note: 'User pays gas fee from their ETH/native token balance'
+    const txResponse = await relayerWallet.sendTransaction({
+      to: permit2Address,
+      data: txData,
+      gasLimit: '300000'
     });
+
+    console.log('✅ Transaction submitted by relayer!');
+    console.log('📤 TX Hash:', txResponse.hash);
+
+    // Wait for confirmation
+    const receipt = await txResponse.wait();
+    
+    if (receipt && receipt.status === 1) {
+      console.log('✅ Transaction confirmed!');
+      console.log('💰 USDC transferred:', ethers.formatUnits(amount, 6), 'to', RECEIVER_ADDRESS);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Payment processed successfully!',
+        network: network.name,
+        chainId: chainId,
+        transactionHash: txResponse.hash,
+        amount: ethers.formatUnits(amount, 6),
+        receivedBy: RECEIVER_ADDRESS
+      });
+    } else {
+      throw new Error('Transaction failed on chain');
+    }
 
   } catch (error) {
     console.error('❌ Payment processing error:', error.message);
