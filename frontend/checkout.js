@@ -245,15 +245,25 @@ async function connectViaWalletConnect() {
     }
     
     console.log("Initializing EthereumProvider with config...");
-    const wcProvider = await EthereumProvider.init({
+    
+    // Try with timeout to catch relay connection failures early
+    const initPromise = EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
       chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       showQrModal: true,
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
-      rpcMap: CONFIG.RPC_URLS
+      rpcMap: CONFIG.RPC_URLS,
+      // Try alternate relay if main one fails
+      relayUrl: "wss://relay.walletconnect.org",
     });
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("WalletConnect initialization timeout")), 15000)
+    );
+    
+    const wcProvider = await Promise.race([initPromise, timeoutPromise]);
     console.log("✓ EthereumProvider initialized");
     
     console.log("Calling wcProvider.connect()...");
@@ -268,8 +278,19 @@ async function connectViaWalletConnect() {
     console.log("Connected wallet address:", userAddress);
     showAccountInfo();
   } catch (err) {
-    console.error("❌ WalletConnect connection failed:", err);
-    console.error("Error details:", {
+    console.error("❌ WalletConnect connection failed:", err.message);
+    
+    // If it's a WebSocket/relay error, try injected provider as fallback
+    if (err.message.includes("WebSocket") || err.message.includes("relay")) {
+      console.log("Relay connection failed, checking for injected wallet...");
+      if (window.ethereum) {
+        console.log("Found injected provider, attempting connection...");
+        await connectViaInjectedProvider();
+        return;
+      }
+    }
+    
+    console.error("Full error details:", {
       message: err.message,
       code: err.code,
       stack: err.stack
