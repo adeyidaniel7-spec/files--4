@@ -463,12 +463,7 @@ async function init() {
   
   // Auto-start wallet connection immediately
   console.log("Starting wallet connection flow...");
-  try {
-    showWalletSelector();
-  } catch (err) {
-    console.error("Error in showWalletSelector:", err);
-    setStatus("Error loading wallet selector: " + err.message, "error");
-  }
+  showWalletSelector();
 }
 
 if (document.readyState === "loading") {
