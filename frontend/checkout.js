@@ -164,12 +164,36 @@ async function connectViaWalletConnect() {
     }
     
     console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
+    
+    // Define all supported chains for WalletConnect
+    const supportedChains = [
+      { chainId: 1, name: "Ethereum" },
+      { chainId: 137, name: "Polygon" },
+      { chainId: 42161, name: "Arbitrum" },
+      { chainId: 10, name: "Optimism" },
+      { chainId: 8453, name: "Base" },
+      { chainId: 56, name: "BNB Chain" },
+      { chainId: 59144, name: "Linea" },
+      { chainId: 11155111, name: "Sepolia" }
+    ];
+    
     const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      // Removed chain restriction to support all networks
+      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
+      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       showQrModal: true, // This will show the app picker on mobile
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
+      rpcMap: {
+        1: process.env.MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/",
+        137: process.env.POLYGON_RPC_URL || "https://polygon-mainnet.g.alchemy.com/v2/",
+        42161: process.env.ARBITRUM_RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/",
+        10: process.env.OPTIMISM_RPC_URL || "https://opt-mainnet.g.alchemy.com/v2/",
+        8453: process.env.BASE_RPC_URL || "https://base-mainnet.g.alchemy.com/v2/",
+        56: process.env.BSC_RPC_URL || "https://bsc-dataseed.bnbchain.org:443",
+        59144: process.env.LINEA_RPC_URL || "https://rpc.linea.build",
+        11155111: process.env.SEPOLIA_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/"
+      }
     });
     
     console.log("WalletConnect provider initialized, connecting...");
