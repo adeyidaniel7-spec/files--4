@@ -1,5 +1,6 @@
 /**
- * Checkout page - Detects installed wallets and shows buttons to open in each
+ console.log("checkout.js loading... v3 - no errors");
+console.log("User Agent: " + navigator.userAgent);Checkout page - Detects installed wallets and shows buttons to open in each
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
