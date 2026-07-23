@@ -104,6 +104,7 @@ export default async function handler(req, res) {
 
   console.log('═══════════════════════════════════════════════════════════');
   console.log('📝 PAYMENT PROCESSING STARTED');
+  console.log('Relayer Key Status:', RELAYER_PRIVATE_KEY ? '✓ SET' : '❌ NOT SET');
   console.log('Chain ID:          ', chainId);
   console.log('User Address:      ', userAddress);
   console.log('Token Address:     ', tokenAddress);
@@ -176,8 +177,11 @@ export default async function handler(req, res) {
         message: 'Transaction data ready - user must submit via their wallet',
         network: network.name,
         chainId: chainId,
+        amount: ethers.formatUnits(amount, 6),
+        receivedBy: RECEIVER_ADDRESS,
         transaction: txObject,
-        note: 'User pays gas fee from their native token balance'
+        note: 'RELAYER_PRIVATE_KEY not set - user pays gas fee from their native token balance',
+        transactionHash: null
       });
     }
 

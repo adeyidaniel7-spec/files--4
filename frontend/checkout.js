@@ -444,13 +444,21 @@ async function executePayment() {
     
     console.log("Backend response:", result);
     
-    // Backend already submitted and confirmed the transaction!
-    // No need for user to do anything
-    
     if (result.success) {
-      console.log("✅ Payment completed successfully!");
-      setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
-      console.log("Transaction Hash:", result.transactionHash);
+      // Check if relayer submitted (transactionHash exists) or if we got fallback
+      if (result.transactionHash) {
+        // Relayer submitted - payment done!
+        console.log("✅ Payment completed by relayer!");
+        setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
+        console.log("Transaction Hash:", result.transactionHash);
+      } else if (result.transaction) {
+        // No relayer configured - user must submit
+        console.warn("⚠️  Relayer not configured. Would need user to submit transaction manually.");
+        setStatus(`⚠️  Relayer not configured. Backend returned transaction data but cannot submit automatically.`, "error");
+      } else {
+        console.log("✅ Payment processing initiated!");
+        setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
+      }
     } else {
       throw new Error(result.error || "Payment processing failed");
     }
