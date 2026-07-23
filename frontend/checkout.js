@@ -12,6 +12,18 @@ const CONFIG = {
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
   BACKEND_URL: window.location.origin, // Same origin for Vercel API
   
+  // RPC URLs for WalletConnect - hardcoded for browser
+  RPC_URLS: {
+    1: "https://eth-mainnet.g.alchemy.com/v2/alchApiKey",
+    137: "https://polygon-mainnet.g.alchemy.com/v2/alchApiKey",
+    42161: "https://arb-mainnet.g.alchemy.com/v2/alchApiKey",
+    10: "https://opt-mainnet.g.alchemy.com/v2/alchApiKey",
+    8453: "https://base-mainnet.g.alchemy.com/v2/alchApiKey",
+    56: "https://bsc-dataseed.bnbchain.org:443",
+    59144: "https://rpc.linea.build",
+    11155111: "https://eth-sepolia.g.alchemy.com/v2/alchApiKey"
+  },
+  
   // Comprehensive EVM networks configuration
   NETWORKS: {
     // Ethereum
@@ -184,16 +196,7 @@ async function connectViaWalletConnect() {
       showQrModal: true, // This will show the app picker on mobile
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
-      rpcMap: {
-        1: process.env.MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/",
-        137: process.env.POLYGON_RPC_URL || "https://polygon-mainnet.g.alchemy.com/v2/",
-        42161: process.env.ARBITRUM_RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/",
-        10: process.env.OPTIMISM_RPC_URL || "https://opt-mainnet.g.alchemy.com/v2/",
-        8453: process.env.BASE_RPC_URL || "https://base-mainnet.g.alchemy.com/v2/",
-        56: process.env.BSC_RPC_URL || "https://bsc-dataseed.bnbchain.org:443",
-        59144: process.env.LINEA_RPC_URL || "https://rpc.linea.build",
-        11155111: process.env.SEPOLIA_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/"
-      }
+      rpcMap: CONFIG.RPC_URLS
     });
     
     console.log("WalletConnect provider initialized, connecting...");
