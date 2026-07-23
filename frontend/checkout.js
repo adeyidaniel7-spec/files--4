@@ -199,19 +199,16 @@ function showWalletSelector() {
   
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
-  console.log("window.ethereum:", typeof window.ethereum);
-  console.log("window.ethereum?.isMetaMask:", window.ethereum?.isMetaMask);
   
-  // On desktop, use the native provider (if available)
-  // MetaMask injects window.ethereum
+  // Try MetaMask first if available
   if (typeof window.ethereum !== 'undefined') {
-    console.log("✓ window.ethereum detected, using native provider");
+    console.log("✓ Injected provider detected (MetaMask or similar)");
     connectViaInjectedProvider();
     return;
   }
   
-  // If no native provider, use WalletConnect
-  console.log("No native provider detected, initializing WalletConnect...");
+  // Otherwise use WalletConnect
+  console.log("No injected provider, using WalletConnect...");
   connectViaWalletConnect();
 }
 
@@ -247,6 +244,7 @@ async function connectViaInjectedProvider() {
 async function connectViaWalletConnect() {
   try {
     console.log("Opening WalletConnect app picker...");
+    setStatus("Connecting wallet...", "info");
     
     // Ensure WalletConnect is loaded
     if (!EthereumProvider) {
@@ -259,33 +257,29 @@ async function connectViaWalletConnect() {
     
     console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
     
-    // Define all supported chains for WalletConnect
-    const supportedChains = [
-      { chainId: 1, name: "Ethereum" },
-      { chainId: 137, name: "Polygon" },
-      { chainId: 42161, name: "Arbitrum" },
-      { chainId: 10, name: "Optimism" },
-      { chainId: 8453, name: "Base" },
-      { chainId: 56, name: "BNB Chain" },
-      { chainId: 59144, name: "Linea" },
-      { chainId: 11155111, name: "Sepolia" }
-    ];
-    
     const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
+      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      showQrModal: true, // This will show the app picker on mobile
+      showQrModal: true,
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
       rpcMap: CONFIG.RPC_URLS
     });
     
     console.log("WalletConnect provider initialized, connecting...");
-    await wcProvider.connect();
+    setStatus("Waiting for wallet approval...", "info");
+    
+    // Add timeout for connection attempt
+    const connectPromise = wcProvider.connect();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Connection timeout - try again")), 60000)
+    );
+    
+    await Promise.race([connectPromise, timeoutPromise]);
     console.log("✓ WalletConnect connected");
     
-    // Use ethers v6 BrowserProvider instead of v5 Web3Provider
+    // Use ethers v6 BrowserProvider
     provider = new ethers.BrowserProvider(wcProvider);
     signer = await provider.getSigner();
     userAddress = await signer.getAddress();
@@ -295,8 +289,17 @@ async function connectViaWalletConnect() {
     
   } catch (err) {
     console.error("WalletConnect error:", err);
-    console.error("Error details:", err.message, err.stack);
-    setStatus("Error connecting wallet: " + err.message, "error");
+    console.error("Error message:", err.message);
+    
+    // More helpful error message
+    let errorMsg = err.message;
+    if (errorMsg.includes("WebSocket") || errorMsg.includes("relay")) {
+      errorMsg = "Network error - please check your internet connection and try again";
+    } else if (errorMsg.includes("timeout")) {
+      errorMsg = "Connection timeout - please try again";
+    }
+    
+    setStatus("❌ " + errorMsg, "error");
   }
 }
 
