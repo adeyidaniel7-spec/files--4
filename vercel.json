@@ -1,18 +1,17 @@
 {
   "version": 2,
-  "outputDirectory": "frontend",
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/../api/$1"
     },
     {
       "src": "/(.+)",
-      "dest": "/frontend/$1"
+      "dest": "/$1"
     },
     {
       "src": "/",
-      "dest": "/frontend/index.html"
+      "dest": "/index.html"
     }
   ]
 }
