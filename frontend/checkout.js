@@ -96,7 +96,7 @@ async function loadWalletConnect() {
     // Try to load via dynamic import (ESM)
     console.log("Attempting ESM import of WalletConnect...");
     try {
-      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/+esm");
+      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/+esm");
       EthereumProvider = module.default || module.EthereumProvider;
       if (!EthereumProvider) {
         throw new Error("Module exports neither default nor EthereumProvider");
@@ -108,7 +108,7 @@ async function loadWalletConnect() {
       
       // Fallback: try UMD script
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/dist/index.umd.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.umd.js';
       script.async = false;
       
       return new Promise((resolve, reject) => {
