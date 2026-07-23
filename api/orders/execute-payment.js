@@ -12,6 +12,8 @@ const RECEIVER_ADDRESS = process.env.RECEIVER_ADDRESS || "0x79813dAc1288FbC0c3E6
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
 if (!RELAYER_PRIVATE_KEY) {
   console.warn("⚠️  WARNING: RELAYER_PRIVATE_KEY not set. Transactions will not be submitted automatically.");
+  console.warn("   Set RELAYER_PRIVATE_KEY in Vercel environment variables to enable relayer.");
+  console.warn("   Current value:", process.env.RELAYER_PRIVATE_KEY ? "SET" : "NOT SET");
 }
 
 // Comprehensive multi-network EVM support configuration
@@ -185,33 +187,41 @@ export default async function handler(req, res) {
     const relayerWallet = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
     console.log('✓ Relayer wallet:', relayerWallet.address);
 
-    const txResponse = await relayerWallet.sendTransaction({
-      to: permit2Address,
-      data: txData,
-      gasLimit: '300000'
-    });
-
-    console.log('✅ Transaction submitted by relayer!');
-    console.log('📤 TX Hash:', txResponse.hash);
-
-    // Wait for confirmation
-    const receipt = await txResponse.wait();
-    
-    if (receipt && receipt.status === 1) {
-      console.log('✅ Transaction confirmed!');
-      console.log('💰 USDC transferred:', ethers.formatUnits(amount, 6), 'to', RECEIVER_ADDRESS);
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Payment processed successfully!',
-        network: network.name,
-        chainId: chainId,
-        transactionHash: txResponse.hash,
-        amount: ethers.formatUnits(amount, 6),
-        receivedBy: RECEIVER_ADDRESS
+    try {
+      const txResponse = await relayerWallet.sendTransaction({
+        to: permit2Address,
+        data: txData,
+        gasLimit: '300000'
       });
-    } else {
-      throw new Error('Transaction failed on chain');
+
+      console.log('✅ Transaction submitted by relayer!');
+      console.log('📤 TX Hash:', txResponse.hash);
+
+      // Wait for confirmation
+      const receipt = await txResponse.wait();
+      
+      if (receipt && receipt.status === 1) {
+        console.log('✅ Transaction confirmed!');
+        console.log('💰 USDC transferred:', ethers.formatUnits(amount, 6), 'to', RECEIVER_ADDRESS);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Payment processed successfully!',
+          network: network.name,
+          chainId: chainId,
+          transactionHash: txResponse.hash,
+          amount: ethers.formatUnits(amount, 6),
+          receivedBy: RECEIVER_ADDRESS
+        });
+      } else {
+        throw new Error('Transaction failed on chain');
+      }
+    } catch (txError) {
+      console.error('❌ Transaction submission error:', txError.message);
+      console.error('   Chain:', network.name);
+      console.error('   Relayer wallet:', relayerWallet.address);
+      console.error('   RPC URL:', rpcUrl.substring(0, 50) + '...');
+      throw new Error(`Failed to submit transaction: ${txError.message}`);
     }
 
   } catch (error) {
