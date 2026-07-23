@@ -200,15 +200,8 @@ function showWalletSelector() {
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
   
-  // Try MetaMask first if available
-  if (typeof window.ethereum !== 'undefined') {
-    console.log("✓ Injected provider detected (MetaMask or similar)");
-    connectViaInjectedProvider();
-    return;
-  }
-  
-  // Otherwise use WalletConnect
-  console.log("No injected provider, using WalletConnect...");
+  // Use WalletConnect to show the wallet selection modal
+  console.log("Launching WalletConnect modal...");
   connectViaWalletConnect();
 }
 
