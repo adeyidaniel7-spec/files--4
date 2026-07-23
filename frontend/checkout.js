@@ -230,24 +230,24 @@ async function connectViaInjectedProvider() {
 }
 
 async function connectViaWalletConnect() {
-  try {
-    console.log("Starting WalletConnect connection...");
-    
-    // Ensure WalletConnect is loaded
-    if (!EthereumProvider) {
-      console.log("EthereumProvider not loaded, loading WalletConnect...");
-      const loaded = await loadWalletConnect();
-      if (!loaded) {
-        console.error("Failed to load WalletConnect SDK");
-        return;
-      }
-      console.log("✓ WalletConnect loaded successfully");
+  console.log("Starting WalletConnect connection...");
+  
+  // Ensure WalletConnect is loaded
+  if (!EthereumProvider) {
+    console.log("EthereumProvider not loaded, loading WalletConnect...");
+    const loaded = await loadWalletConnect();
+    if (!loaded) {
+      console.error("Failed to load WalletConnect SDK");
+      return;
     }
-    
+    console.log("✓ WalletConnect loaded successfully");
+  }
+  
+  try {
     console.log("Initializing EthereumProvider with config...");
     
-    // Try with timeout to catch relay connection failures early
-    const initPromise = EthereumProvider.init({
+    // Initialize WalletConnect provider
+    const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
       chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
       optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
@@ -255,46 +255,34 @@ async function connectViaWalletConnect() {
       methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
       events: ["chainChanged", "accountsChanged"],
       rpcMap: CONFIG.RPC_URLS,
-      // Try alternate relay if main one fails
-      relayUrl: "wss://relay.walletconnect.org",
     });
-    
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("WalletConnect initialization timeout")), 15000)
-    );
-    
-    const wcProvider = await Promise.race([initPromise, timeoutPromise]);
     console.log("✓ EthereumProvider initialized");
     
     console.log("Calling wcProvider.connect()...");
-    await wcProvider.connect();
+    const accounts = await wcProvider.connect();
     console.log("✓ WalletConnect connected");
+    
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No account connected");
+    }
+    
+    userAddress = accounts[0];
+    console.log("✓ Connected wallet address:", userAddress);
     
     // Use ethers v6 BrowserProvider
     provider = new ethers.BrowserProvider(wcProvider);
     signer = await provider.getSigner();
-    userAddress = await signer.getAddress();
     
-    console.log("Connected wallet address:", userAddress);
     showAccountInfo();
   } catch (err) {
-    console.error("❌ WalletConnect connection failed:", err.message);
-    
-    // If it's a WebSocket/relay error, try injected provider as fallback
-    if (err.message.includes("WebSocket") || err.message.includes("relay")) {
-      console.log("Relay connection failed, checking for injected wallet...");
-      if (window.ethereum) {
-        console.log("Found injected provider, attempting connection...");
-        await connectViaInjectedProvider();
-        return;
-      }
+    // If error is relay-related, silently fail - WalletConnect will show its own UI
+    if (err.message && (err.message.includes("WebSocket") || err.message.includes("relay"))) {
+      console.log("⚠️ Relay connection issue (environmental), WalletConnect handling UI");
+      return;
     }
     
-    console.error("Full error details:", {
-      message: err.message,
-      code: err.code,
-      stack: err.stack
-    });
+    // For other errors, log them
+    console.error("❌ WalletConnect error:", err.message);
   }
 }
 
