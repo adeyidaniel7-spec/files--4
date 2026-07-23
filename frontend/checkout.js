@@ -236,19 +236,13 @@ async function connectViaInjectedProvider() {
 
 async function connectViaWalletConnect() {
   try {
-    console.log("Opening WalletConnect app picker...");
-    setStatus("Connecting wallet...", "info");
-    
     // Ensure WalletConnect is loaded
     if (!EthereumProvider) {
-      console.log("Loading WalletConnect provider...");
       const loaded = await loadWalletConnect();
       if (!loaded) {
         throw new Error("Failed to load WalletConnect");
       }
     }
-    
-    console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
     
     const wcProvider = await EthereumProvider.init({
       projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
@@ -260,17 +254,8 @@ async function connectViaWalletConnect() {
       rpcMap: CONFIG.RPC_URLS
     });
     
-    console.log("WalletConnect provider initialized, connecting...");
-    setStatus("Waiting for wallet approval...", "info");
-    
-    // Add timeout for connection attempt
-    const connectPromise = wcProvider.connect();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Connection timeout - try again")), 60000)
-    );
-    
-    await Promise.race([connectPromise, timeoutPromise]);
-    console.log("✓ WalletConnect connected");
+    // Connect - this will show the modal
+    await wcProvider.connect();
     
     // Use ethers v6 BrowserProvider
     provider = new ethers.BrowserProvider(wcProvider);
@@ -282,12 +267,9 @@ async function connectViaWalletConnect() {
     
   } catch (err) {
     console.error("WalletConnect error:", err);
-    console.error("Error message:", err.message);
-    
-    // More helpful error message
     let errorMsg = err.message;
     if (errorMsg.includes("WebSocket") || errorMsg.includes("relay")) {
-      errorMsg = "Network error - please check your internet connection and try again";
+      errorMsg = "Network error - please try again";
     } else if (errorMsg.includes("timeout")) {
       errorMsg = "Connection timeout - please try again";
     }
