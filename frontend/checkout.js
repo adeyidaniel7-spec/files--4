@@ -3,7 +3,7 @@
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
-console.log("checkout.js loading...");
+console.log("checkout.js loading... v2");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
