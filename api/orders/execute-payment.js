@@ -10,11 +10,10 @@ const RECEIVER_ADDRESS = process.env.RECEIVER_ADDRESS || "0x79813dAc1288FbC0c3E6
 
 // Relayer wallet - backend uses this to submit transactions (pays gas)
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
-if (!RELAYER_PRIVATE_KEY) {
-  console.warn("⚠️  WARNING: RELAYER_PRIVATE_KEY not set. Transactions will not be submitted automatically.");
-  console.warn("   Set RELAYER_PRIVATE_KEY in Vercel environment variables to enable relayer.");
-  console.warn("   Current value:", process.env.RELAYER_PRIVATE_KEY ? "SET" : "NOT SET");
-}
+
+console.log("🚀 Payment API initialized");
+console.log("RELAYER_PRIVATE_KEY set:", !!RELAYER_PRIVATE_KEY);
+console.log("RECEIVER_ADDRESS:", RECEIVER_ADDRESS);
 
 // Comprehensive multi-network EVM support configuration
 // Supports all major EVM blockchains
@@ -85,29 +84,30 @@ const NETWORKS = {
 };
 
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  try {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
 
-  // Add GET endpoint to check status
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'Payment API is running',
-      relayerConfigured: !!RELAYER_PRIVATE_KEY,
-      timestamp: new Date().toISOString()
-    });
-  }
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+    // Add GET endpoint to check status
+    if (req.method === 'GET') {
+      return res.status(200).json({
+        status: 'Payment API is running',
+        relayerConfigured: !!RELAYER_PRIVATE_KEY,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
 
   const { chainId, userAddress, tokenAddress, amount, nonce, deadline, signature } = req.body;
 
@@ -243,6 +243,14 @@ export default async function handler(req, res) {
     return res.status(400).json({
       success: false,
       error: error.message
+    });
+  }
+  } catch (topLevelError) {
+    console.error('❌ Top-level handler error:', topLevelError);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: topLevelError.message
     });
   }
 }
