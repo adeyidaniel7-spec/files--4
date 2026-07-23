@@ -1,10 +1,9 @@
 /**
- console.log("checkout.js loading... v3 - no errors");
-console.log("User Agent: " + navigator.userAgent);Checkout page - Detects installed wallets and shows buttons to open in each
+ * Checkout page - Detects installed wallets and shows buttons to open in each
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
-console.log("checkout.js loading... v2");
+console.log("checkout.js loading... v3 - no errors");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -207,32 +206,27 @@ function showWalletSelector() {
 }
 
 async function connectViaInjectedProvider() {
-  try {
-    console.log("Connecting via injected provider (MetaMask, etc.)...");
-    
-    // Request account access
-    const accounts = await window.ethereum.request({ 
-      method: 'eth_requestAccounts' 
-    });
-    
-    if (!accounts || accounts.length === 0) {
-      throw new Error("No accounts returned from wallet");
-    }
-    
-    userAddress = accounts[0];
-    console.log("✓ Connected wallet:", userAddress);
-    
-    // Create provider from injected ethereum
-    provider = new ethers.BrowserProvider(window.ethereum);
-    signer = await provider.getSigner();
-    
-    console.log("✓ Provider initialized");
-    showAccountInfo();
-    
-  } catch (err) {
-    console.error("Injected provider error:", err);
-    setStatus("Wallet connection error: " + err.message, "error");
+  console.log("Connecting via injected provider (MetaMask, etc.)...");
+  
+  // Request account access
+  const accounts = await window.ethereum.request({ 
+    method: 'eth_requestAccounts' 
+  });
+  
+  if (!accounts || accounts.length === 0) {
+    console.error("No accounts returned from wallet");
+    return;
   }
+  
+  userAddress = accounts[0];
+  console.log("✓ Connected wallet:", userAddress);
+  
+  // Create provider from injected ethereum
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+  
+  console.log("✓ Provider initialized");
+  showAccountInfo();
 }
 
 async function connectViaWalletConnect() {
