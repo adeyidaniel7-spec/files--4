@@ -230,35 +230,51 @@ async function connectViaInjectedProvider() {
 }
 
 async function connectViaWalletConnect() {
-  // Ensure WalletConnect is loaded
-  if (!EthereumProvider) {
-    const loaded = await loadWalletConnect();
-    if (!loaded) {
-      console.error("Failed to load WalletConnect");
-      return;
+  try {
+    console.log("Starting WalletConnect connection...");
+    
+    // Ensure WalletConnect is loaded
+    if (!EthereumProvider) {
+      console.log("EthereumProvider not loaded, loading WalletConnect...");
+      const loaded = await loadWalletConnect();
+      if (!loaded) {
+        console.error("Failed to load WalletConnect SDK");
+        return;
+      }
+      console.log("✓ WalletConnect loaded successfully");
     }
+    
+    console.log("Initializing EthereumProvider with config...");
+    const wcProvider = await EthereumProvider.init({
+      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+      showQrModal: true,
+      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+      events: ["chainChanged", "accountsChanged"],
+      rpcMap: CONFIG.RPC_URLS
+    });
+    console.log("✓ EthereumProvider initialized");
+    
+    console.log("Calling wcProvider.connect()...");
+    await wcProvider.connect();
+    console.log("✓ WalletConnect connected");
+    
+    // Use ethers v6 BrowserProvider
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+    
+    console.log("Connected wallet address:", userAddress);
+    showAccountInfo();
+  } catch (err) {
+    console.error("❌ WalletConnect connection failed:", err);
+    console.error("Error details:", {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    });
   }
-  
-  const wcProvider = await EthereumProvider.init({
-    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-    chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-    optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-    showQrModal: true,
-    methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-    events: ["chainChanged", "accountsChanged"],
-    rpcMap: CONFIG.RPC_URLS
-  });
-  
-  // Connect - this will show the modal
-  await wcProvider.connect();
-  
-  // Use ethers v6 BrowserProvider
-  provider = new ethers.BrowserProvider(wcProvider);
-  signer = await provider.getSigner();
-  userAddress = await signer.getAddress();
-  
-  console.log("Connected wallet address:", userAddress);
-  showAccountInfo();
 }
 
 function showAccountInfo() {
