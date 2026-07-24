@@ -1,9 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Build complete'",
-  "outputDirectory": "frontend",
+  "buildCommand": "cp -r frontend/* .",
   "functions": {
-    "frontend/api/**/*.js": {
+    "api/**/*.js": {
       "runtime": "nodejs20.x"
     }
   },
