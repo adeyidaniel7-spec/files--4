@@ -1,9 +1,3 @@
 {
-  "version": 2,
-  "buildCommand": "mkdir -p .vercel/output/static && cp -r frontend/* .vercel/output/static/ && cp -r api .vercel/output/functions/",
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  }
+  "version": 2
 }
