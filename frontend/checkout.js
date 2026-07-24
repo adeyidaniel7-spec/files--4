@@ -10,7 +10,7 @@ const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
   RECEIVER_ADDRESS: "0x79813dAc1288FbC0c3E629cFA18682Fd633b2FbA", // Where payments go
   WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
-  BACKEND_URL: window.location.origin, // Same origin for Vercel API
+  BACKEND_URL: "https://checkout-api-wkyo.onrender.com", // Render API server
   
   // RPC URLs for WalletConnect - hardcoded for browser
   RPC_URLS: {
