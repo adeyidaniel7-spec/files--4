@@ -3,7 +3,7 @@
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
-console.log("checkout.js loading... v3 - no errors");
+console.log("checkout.js loading... v4 - with WalletConnect 2.19.0");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -96,7 +96,8 @@ async function loadWalletConnect() {
     // Try to load via dynamic import (ESM)
     console.log("Attempting ESM import of WalletConnect...");
     try {
-      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/+esm");
+      // Use exact version with cache buster to avoid CDN caching old version
+      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.mjs?t=" + Date.now());
       EthereumProvider = module.default || module.EthereumProvider;
       if (!EthereumProvider) {
         throw new Error("Module exports neither default nor EthereumProvider");
@@ -106,9 +107,9 @@ async function loadWalletConnect() {
     } catch (emsErr) {
       console.warn("ESM import failed, trying UMD script...", emsErr.message);
       
-      // Fallback: try UMD script
+      // Fallback: try UMD script with cache buster
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.umd.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.umd.js?t=' + Date.now();
       script.async = false;
       
       return new Promise((resolve, reject) => {
