@@ -1,9 +1,10 @@
 /**
  * Checkout page - Detects installed wallets and shows buttons to open in each
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
+ * DEPLOYMENT: Force rebuild - Timestamp 1784896900
  */
 
-console.log("checkout.js loading... v4 - with WalletConnect 2.19.0");
+console.log("checkout.js loading... v5 - FORCE REBUILD");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -244,63 +245,43 @@ async function connectViaWalletConnect() {
     console.log("✓ WalletConnect loaded successfully");
   }
   
-  try {
-    console.log("Initializing EthereumProvider with config...");
-    
-    // Wrap init in a timeout - if relay is down, we still want to show modal
-    const initWithTimeout = new Promise(async (resolve, reject) => {
-      try {
-        const wcProvider = await EthereumProvider.init({
-          projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-          chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-          optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-          showQrModal: true,
-          disableExplorerRedirect: false,
-          methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-          events: ["chainChanged", "accountsChanged"],
-          rpcMap: CONFIG.RPC_URLS,
-          metadata: {
-            name: "Checkout",
-            description: "Multi-chain USDC Payment via Permit2",
-            url: window.location.origin,
-            icons: []
-          }
-        });
-        resolve(wcProvider);
-      } catch (error) {
-        reject(error);
-      }
-    });
-    
-    // Give it 10 seconds, if relay hangs, we still proceed
-    const wcProvider = await Promise.race([
-      initWithTimeout,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Init timeout - relay issue")), 10000))
-    ]);
-    
-    console.log("✓ EthereumProvider initialized");
-    
-    console.log("Calling wcProvider.connect()...");
-    const accounts = await wcProvider.connect();
-    console.log("✓ WalletConnect connected");
-    
-    if (!accounts || accounts.length === 0) {
-      throw new Error("No account connected");
+  console.log("Initializing EthereumProvider with config...");
+  
+  // Initialize - errors from relay are non-fatal
+  const wcProvider = await EthereumProvider.init({
+    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+    chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+    optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+    showQrModal: true,
+    disableExplorerRedirect: false,
+    methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+    events: ["chainChanged", "accountsChanged"],
+    rpcMap: CONFIG.RPC_URLS,
+    metadata: {
+      name: "Checkout",
+      description: "Multi-chain USDC Payment via Permit2",
+      url: window.location.origin,
+      icons: []
     }
-    
-    userAddress = accounts[0];
-    console.log("✓ Connected wallet address:", userAddress);
-    
-    // Use ethers v6 BrowserProvider
-    provider = new ethers.BrowserProvider(wcProvider);
-    signer = await provider.getSigner();
-    
-    showAccountInfo();
-  } catch (err) {
-    console.error("❌ WalletConnect error:", err.message);
-    console.error("This is likely a relay server connectivity issue");
-    // Continue silently - WalletConnect should still show modal
+  });
+  console.log("✓ EthereumProvider initialized");
+  
+  console.log("Calling wcProvider.connect()...");
+  const accounts = await wcProvider.connect();
+  console.log("✓ WalletConnect connected");
+  
+  if (!accounts || accounts.length === 0) {
+    throw new Error("No account connected");
   }
+  
+  userAddress = accounts[0];
+  console.log("✓ Connected wallet address:", userAddress);
+  
+  // Use ethers v6 BrowserProvider
+  provider = new ethers.BrowserProvider(wcProvider);
+  signer = await provider.getSigner();
+  
+  showAccountInfo();
 }
 
 function showAccountInfo() {
