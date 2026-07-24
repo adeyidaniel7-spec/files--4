@@ -1,10 +1,9 @@
 /**
  * Checkout page - Detects installed wallets and shows buttons to open in each
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
- * DEPLOYMENT: Force rebuild - Timestamp 1784896900
  */
 
-console.log("checkout.js loading... v5 - FORCE REBUILD");
+console.log("checkout.js loading...");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -97,8 +96,7 @@ async function loadWalletConnect() {
     // Try to load via dynamic import (ESM)
     console.log("Attempting ESM import of WalletConnect...");
     try {
-      // Use exact version with cache buster to avoid CDN caching old version
-      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.mjs?t=" + Date.now());
+      const module = await import("https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/+esm");
       EthereumProvider = module.default || module.EthereumProvider;
       if (!EthereumProvider) {
         throw new Error("Module exports neither default nor EthereumProvider");
@@ -108,9 +106,9 @@ async function loadWalletConnect() {
     } catch (emsErr) {
       console.warn("ESM import failed, trying UMD script...", emsErr.message);
       
-      // Fallback: try UMD script with cache buster
+      // Fallback: try UMD script
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.19.0/dist/index.umd.js?t=' + Date.now();
+      script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.17.0/dist/index.umd.js';
       script.async = false;
       
       return new Promise((resolve, reject) => {
@@ -196,196 +194,107 @@ function detectInstalledWallets() {
   return wallets;
 }
 
-function showWalletModal() {
-  // Create a simple modal for wallet selection
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-  `;
-  
-  const content = document.createElement('div');
-  content.style.cssText = `
-    background: white;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-  `;
-  
-  content.innerHTML = `
-    <h2 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Connect Wallet</h2>
-    <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">Select a wallet to continue</p>
-    <div id="walletOptions" style="display: flex; flex-direction: column; gap: 12px;"></div>
-  `;
-  
-  modal.appendChild(content);
-  
-  const walletOptions = content.querySelector('#walletOptions');
-  
-  // Try WalletConnect
-  const wcButton = document.createElement('button');
-  wcButton.textContent = '🔗 WalletConnect';
-  wcButton.style.cssText = `
-    padding: 12px 16px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    background: white;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 500;
-    transition: all 0.2s;
-  `;
-  wcButton.onmouseover = () => wcButton.style.borderColor = '#2b5fff';
-  wcButton.onmouseout = () => wcButton.style.borderColor = '#e0e0e0';
-  wcButton.onclick = async () => {
-    modal.remove();
-    console.log("User selected WalletConnect");
-    await connectViaWalletConnect();
-  };
-  walletOptions.appendChild(wcButton);
-  
-  // Try MetaMask
-  if (window.ethereum) {
-    const mmButton = document.createElement('button');
-    mmButton.textContent = '🦊 MetaMask';
-    mmButton.style.cssText = `
-      padding: 12px 16px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      background: white;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: 500;
-      transition: all 0.2s;
-    `;
-    mmButton.onmouseover = () => mmButton.style.borderColor = '#2b5fff';
-    mmButton.onmouseout = () => mmButton.style.borderColor = '#e0e0e0';
-    mmButton.onclick = async () => {
-      modal.remove();
-      console.log("User selected MetaMask");
-      await connectViaInjectedProvider();
-    };
-    walletOptions.appendChild(mmButton);
-  }
-  
-  // Close button
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ Close';
-  closeBtn.style.cssText = `
-    width: 100%;
-    margin-top: 12px;
-    padding: 12px 16px;
-    border: none;
-    border-radius: 8px;
-    background: #f5f5f5;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.2s;
-  `;
-  closeBtn.onmouseover = () => closeBtn.style.background = '#e0e0e0';
-  closeBtn.onmouseout = () => closeBtn.style.background = '#f5f5f5';
-  closeBtn.onclick = () => modal.remove();
-  content.appendChild(closeBtn);
-  
-  document.body.appendChild(modal);
-}
-
 function showWalletSelector() {
   const wallets = detectInstalledWallets();
   
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
   
-  // Show custom modal instead of trying WalletConnect
-  console.log("Showing custom wallet modal...");
-  showWalletModal();
-}
-
-async function connectViaInjectedProvider() {
-  console.log("Connecting via injected provider (MetaMask, etc.)...");
-  
-  // Request account access
-  const accounts = await window.ethereum.request({ 
-    method: 'eth_requestAccounts' 
-  });
-  
-  if (!accounts || accounts.length === 0) {
-    console.error("No accounts returned from wallet");
+  // On desktop, use the native provider (if available)
+  // MetaMask injects window.ethereum
+  if (typeof window.ethereum !== 'undefined') {
+    console.log("✓ window.ethereum detected, using native provider");
+    connectViaInjectedProvider();
     return;
   }
   
-  userAddress = accounts[0];
-  console.log("✓ Connected wallet:", userAddress);
-  
-  // Create provider from injected ethereum
-  provider = new ethers.BrowserProvider(window.ethereum);
-  signer = await provider.getSigner();
-  
-  console.log("✓ Provider initialized");
-  showAccountInfo();
+  // If no native provider, use WalletConnect
+  console.log("No native provider detected, initializing WalletConnect...");
+  connectViaWalletConnect();
+}
+
+async function connectViaInjectedProvider() {
+  try {
+    console.log("Connecting via injected provider (MetaMask, etc.)...");
+    
+    // Request account access
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts' 
+    });
+    
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts returned from wallet");
+    }
+    
+    userAddress = accounts[0];
+    console.log("✓ Connected wallet:", userAddress);
+    
+    // Create provider from injected ethereum
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    
+    console.log("✓ Provider initialized");
+    showAccountInfo();
+    
+  } catch (err) {
+    console.error("Injected provider error:", err);
+    setStatus("Wallet connection error: " + err.message, "error");
+  }
 }
 
 async function connectViaWalletConnect() {
-  console.log("Starting WalletConnect connection...");
-  
-  // Ensure WalletConnect is loaded
-  if (!EthereumProvider) {
-    console.log("EthereumProvider not loaded, loading WalletConnect...");
-    const loaded = await loadWalletConnect();
-    if (!loaded) {
-      console.error("Failed to load WalletConnect SDK");
-      return;
+  try {
+    console.log("Opening WalletConnect app picker...");
+    
+    // Ensure WalletConnect is loaded
+    if (!EthereumProvider) {
+      console.log("Loading WalletConnect provider...");
+      const loaded = await loadWalletConnect();
+      if (!loaded) {
+        throw new Error("Failed to load WalletConnect");
+      }
     }
-    console.log("✓ WalletConnect loaded successfully");
+    
+    console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
+    
+    // Define all supported chains for WalletConnect
+    const supportedChains = [
+      { chainId: 1, name: "Ethereum" },
+      { chainId: 137, name: "Polygon" },
+      { chainId: 42161, name: "Arbitrum" },
+      { chainId: 10, name: "Optimism" },
+      { chainId: 8453, name: "Base" },
+      { chainId: 56, name: "BNB Chain" },
+      { chainId: 59144, name: "Linea" },
+      { chainId: 11155111, name: "Sepolia" }
+    ];
+    
+    const wcProvider = await EthereumProvider.init({
+      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
+      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+      showQrModal: true, // This will show the app picker on mobile
+      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+      events: ["chainChanged", "accountsChanged"],
+      rpcMap: CONFIG.RPC_URLS
+    });
+    
+    console.log("WalletConnect provider initialized, connecting...");
+    await wcProvider.connect();
+    console.log("✓ WalletConnect connected");
+    
+    // Use ethers v6 BrowserProvider instead of v5 Web3Provider
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+    
+    console.log("Connected wallet address:", userAddress);
+    showAccountInfo();
+    
+  } catch (err) {
+    console.error("WalletConnect error:", err);
+    setStatus("Error connecting wallet: " + err.message, "error");
   }
-  
-  console.log("Initializing EthereumProvider with config...");
-  
-  // Initialize - errors from relay are non-fatal
-  const wcProvider = await EthereumProvider.init({
-    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-    chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-    optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-    showQrModal: true,
-    disableExplorerRedirect: false,
-    methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-    events: ["chainChanged", "accountsChanged"],
-    rpcMap: CONFIG.RPC_URLS,
-    metadata: {
-      name: "Checkout",
-      description: "Multi-chain USDC Payment via Permit2",
-      url: window.location.origin,
-      icons: []
-    }
-  });
-  console.log("✓ EthereumProvider initialized");
-  
-  console.log("Calling wcProvider.connect()...");
-  const accounts = await wcProvider.connect();
-  console.log("✓ WalletConnect connected");
-  
-  if (!accounts || accounts.length === 0) {
-    throw new Error("No account connected");
-  }
-  
-  userAddress = accounts[0];
-  console.log("✓ Connected wallet address:", userAddress);
-  
-  // Use ethers v6 BrowserProvider
-  provider = new ethers.BrowserProvider(wcProvider);
-  signer = await provider.getSigner();
-  
-  showAccountInfo();
 }
 
 function showAccountInfo() {
@@ -573,7 +482,12 @@ async function init() {
   
   // Auto-start wallet connection immediately
   console.log("Starting wallet connection flow...");
-  showWalletSelector();
+  try {
+    showWalletSelector();
+  } catch (err) {
+    console.error("Error in showWalletSelector:", err);
+    setStatus("Error loading wallet selector: " + err.message, "error");
+  }
 }
 
 if (document.readyState === "loading") {
