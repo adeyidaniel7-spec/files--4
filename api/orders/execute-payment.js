@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+const { ethers } = require('ethers');
 
 // Permit2 ABI - we call this directly instead of deploying our own contract
 const PERMIT2_ABI = [
@@ -83,7 +83,7 @@ const NETWORKS = {
   },
 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
