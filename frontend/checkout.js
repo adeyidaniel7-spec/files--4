@@ -196,15 +196,119 @@ function detectInstalledWallets() {
   return wallets;
 }
 
+function showWalletModal() {
+  // Create a simple modal for wallet selection
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  
+  const content = document.createElement('div');
+  content.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  `;
+  
+  content.innerHTML = `
+    <h2 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Connect Wallet</h2>
+    <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">Select a wallet to continue</p>
+    <div id="walletOptions" style="display: flex; flex-direction: column; gap: 12px;"></div>
+  `;
+  
+  modal.appendChild(content);
+  
+  const walletOptions = content.querySelector('#walletOptions');
+  
+  // Try WalletConnect
+  const wcButton = document.createElement('button');
+  wcButton.textContent = '🔗 WalletConnect';
+  wcButton.style.cssText = `
+    padding: 12px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    transition: all 0.2s;
+  `;
+  wcButton.onmouseover = () => wcButton.style.borderColor = '#2b5fff';
+  wcButton.onmouseout = () => wcButton.style.borderColor = '#e0e0e0';
+  wcButton.onclick = async () => {
+    modal.remove();
+    console.log("User selected WalletConnect");
+    await connectViaWalletConnect();
+  };
+  walletOptions.appendChild(wcButton);
+  
+  // Try MetaMask
+  if (window.ethereum) {
+    const mmButton = document.createElement('button');
+    mmButton.textContent = '🦊 MetaMask';
+    mmButton.style.cssText = `
+      padding: 12px 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      transition: all 0.2s;
+    `;
+    mmButton.onmouseover = () => mmButton.style.borderColor = '#2b5fff';
+    mmButton.onmouseout = () => mmButton.style.borderColor = '#e0e0e0';
+    mmButton.onclick = async () => {
+      modal.remove();
+      console.log("User selected MetaMask");
+      await connectViaInjectedProvider();
+    };
+    walletOptions.appendChild(mmButton);
+  }
+  
+  // Close button
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ Close';
+  closeBtn.style.cssText = `
+    width: 100%;
+    margin-top: 12px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+  `;
+  closeBtn.onmouseover = () => closeBtn.style.background = '#e0e0e0';
+  closeBtn.onmouseout = () => closeBtn.style.background = '#f5f5f5';
+  closeBtn.onclick = () => modal.remove();
+  content.appendChild(closeBtn);
+  
+  document.body.appendChild(modal);
+}
+
 function showWalletSelector() {
   const wallets = detectInstalledWallets();
   
   console.log(`===== WALLET SELECTOR =====`);
   console.log(`Detected ${wallets.length} wallets`);
   
-  // Use WalletConnect to show the wallet selection modal
-  console.log("Launching WalletConnect modal...");
-  connectViaWalletConnect();
+  // Show custom modal instead of trying WalletConnect
+  console.log("Showing custom wallet modal...");
+  showWalletModal();
 }
 
 async function connectViaInjectedProvider() {
