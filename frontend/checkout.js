@@ -3,7 +3,7 @@
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
-console.log("checkout.js loading... v6 - Deep Link Wallet Modal (No Relay)");
+console.log("checkout.js loading... v7 - EIP-6963 Multi-Wallet Detection + Deep Links");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -71,6 +71,24 @@ const CONFIG = {
 
 let provider, signer, userAddress;
 let EthereumProvider; // Will be loaded async
+
+// EIP-6963: Dynamically discover ALL installed browser extension wallets
+// (MetaMask, Rabby, Coinbase, Rainbow, Brave Wallet, Phantom, OKX, etc.)
+// This works for ANY wallet extension that follows the EIP-6963 standard -
+// no hardcoding needed, it detects whatever is actually installed.
+const discoveredProviders = new Map(); // uuid -> { info, provider }
+
+window.addEventListener("eip6963:announceProvider", (event) => {
+  const { info, provider: prov } = event.detail;
+  console.log(`✓ EIP-6963 wallet discovered: ${info.name} (${info.rdns})`);
+  discoveredProviders.set(info.uuid, { info, provider: prov });
+});
+
+// Request all wallets to announce themselves
+function requestWalletProviders() {
+  discoveredProviders.clear();
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+}
 
 const el = {
   status: document.getElementById("status"),
@@ -186,6 +204,10 @@ function detectInstalledWallets() {
 // Tapping these opens the wallet's own in-app browser pointed at THIS page.
 // Once inside the wallet's browser, window.ethereum is injected automatically -
 // no WalletConnect relay needed at all.
+// NOTE: There is no browser API to detect which apps are installed on a phone
+// (that's a deliberate privacy/security restriction). This is the widest
+// practical catalog of deep links - tapping one will open that app if it's
+// installed, or fall back to the app/play store if it's not.
 const WALLET_CATALOG = [
   {
     name: "MetaMask",
@@ -226,6 +248,41 @@ const WALLET_CATALOG = [
     name: "Token Pocket",
     icon: "🟦",
     getLink: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Phantom",
+    icon: "👻",
+    getLink: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Zerion",
+    icon: "🔺",
+    getLink: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "1inch Wallet",
+    icon: "🦄",
+    getLink: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "SafePal",
+    icon: "🔐",
+    getLink: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Bitget Wallet",
+    icon: "🟠",
+    getLink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "MathWallet",
+    icon: "🔢",
+    getLink: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Argent",
+    icon: "🅰️",
+    getLink: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`
   },
 ];
 
@@ -271,32 +328,66 @@ function showWalletModal() {
   
   // If already inside a wallet's in-app browser (window.ethereum exists), offer direct connect first
   if (typeof window.ethereum !== "undefined") {
-    const directBtn = document.createElement("button");
-    directBtn.innerHTML = `<span style="font-size:20px;margin-right:10px;">✅</span> Connect This Browser's Wallet`;
-    directBtn.style.cssText = walletBtnStyle(true);
-    directBtn.onmouseover = () => directBtn.style.borderColor = "#2b5fff";
-    directBtn.onmouseout = () => directBtn.style.borderColor = "#2b5fff";
-    directBtn.onclick = () => {
-      overlay.remove();
-      connectViaInjectedProvider();
-    };
-    list.appendChild(directBtn);
+    // Ask all EIP-6963 compliant extensions to announce themselves
+    requestWalletProviders();
   }
   
-  // Wallet catalog buttons - deep link into each wallet's in-app browser
-  WALLET_CATALOG.forEach(wallet => {
-    const btn = document.createElement("button");
-    btn.innerHTML = `<span style="font-size:20px;margin-right:10px;">${wallet.icon}</span> ${wallet.name}`;
-    btn.style.cssText = walletBtnStyle(false);
-    btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
-    btn.onmouseout = () => btn.style.borderColor = "#e0e0e0";
-    btn.onclick = () => {
-      console.log(`Opening ${wallet.name} via deep link...`);
-      const link = wallet.getLink(currentUrl);
-      window.location.href = link;
-    };
-    list.appendChild(btn);
-  });
+  // Give browser extensions a brief moment (usually instant) to respond to eip6963:requestProvider
+  setTimeout(() => {
+    // If we discovered specific wallets via EIP-6963, list each one individually
+    if (discoveredProviders.size > 0) {
+      discoveredProviders.forEach(({ info, provider: prov }) => {
+        const btn = document.createElement("button");
+        const iconHtml = info.icon
+          ? `<img src="${info.icon}" style="width:22px;height:22px;margin-right:10px;border-radius:4px;" />`
+          : `<span style="font-size:20px;margin-right:10px;">💳</span>`;
+        btn.innerHTML = `${iconHtml} ${info.name}`;
+        btn.style.cssText = walletBtnStyle(true);
+        btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
+        btn.onmouseout = () => btn.style.borderColor = "#2b5fff";
+        btn.onclick = () => {
+          overlay.remove();
+          connectViaInjectedProvider(prov);
+        };
+        list.appendChild(btn);
+      });
+    } else if (typeof window.ethereum !== "undefined") {
+      // Fallback: at least one injected wallet exists but doesn't support EIP-6963
+      const directBtn = document.createElement("button");
+      directBtn.innerHTML = `<span style="font-size:20px;margin-right:10px;">✅</span> Connect Browser Wallet`;
+      directBtn.style.cssText = walletBtnStyle(true);
+      directBtn.onmouseover = () => directBtn.style.borderColor = "#2b5fff";
+      directBtn.onmouseout = () => directBtn.style.borderColor = "#2b5fff";
+      directBtn.onclick = () => {
+        overlay.remove();
+        connectViaInjectedProvider();
+      };
+      list.appendChild(directBtn);
+    }
+    
+    // Divider label if we have both extension wallets and deep-link options
+    if (discoveredProviders.size > 0 || typeof window.ethereum !== "undefined") {
+      const divider = document.createElement("div");
+      divider.textContent = "Or open in a mobile wallet app";
+      divider.style.cssText = "margin: 8px 0 2px 0; font-size:12px; color:#999; text-align:center;";
+      list.appendChild(divider);
+    }
+    
+    // Wallet catalog buttons - deep link into each wallet's in-app browser (mobile)
+    WALLET_CATALOG.forEach(wallet => {
+      const btn = document.createElement("button");
+      btn.innerHTML = `<span style="font-size:20px;margin-right:10px;">${wallet.icon}</span> ${wallet.name}`;
+      btn.style.cssText = walletBtnStyle(false);
+      btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
+      btn.onmouseout = () => btn.style.borderColor = "#e0e0e0";
+      btn.onclick = () => {
+        console.log(`Opening ${wallet.name} via deep link...`);
+        const link = wallet.getLink(currentUrl);
+        window.location.href = link;
+      };
+      list.appendChild(btn);
+    });
+  }, 150);
   
   box.appendChild(list);
   
@@ -339,24 +430,29 @@ function walletBtnStyle(highlighted) {
 function showWalletSelector() {
   console.log("===== WALLET SELECTOR =====");
   
-  // If already inside a wallet's in-app browser, connect directly - skip modal
-  if (typeof window.ethereum !== "undefined") {
-    console.log("✓ window.ethereum detected, connecting directly");
+  // If we're already INSIDE a mobile wallet's in-app browser (e.g. opened via
+  // MetaMask's own browser), connect directly - no need to show the picker again.
+  const inAppWallets = detectInstalledWallets();
+  if (inAppWallets.length > 0 && typeof window.ethereum !== "undefined") {
+    console.log(`✓ Inside ${inAppWallets[0].name}'s in-app browser, connecting directly`);
     connectViaInjectedProvider();
     return;
   }
   
-  // Otherwise show the wallet picker modal with deep links (no relay needed)
-  console.log("No injected wallet found, showing wallet picker modal...");
+  // Otherwise show the wallet picker modal:
+  // - Desktop: lists every EIP-6963 wallet extension actually installed
+  // - Mobile: lists deep links to open each wallet's own in-app browser
+  console.log("Showing wallet picker modal...");
   showWalletModal();
 }
 
-async function connectViaInjectedProvider() {
+async function connectViaInjectedProvider(specificProvider) {
   try {
-    console.log("Connecting via injected provider (MetaMask, etc.)...");
+    const targetProvider = specificProvider || window.ethereum;
+    console.log("Connecting via injected provider...");
     
     // Request account access
-    const accounts = await window.ethereum.request({ 
+    const accounts = await targetProvider.request({ 
       method: 'eth_requestAccounts' 
     });
     
@@ -367,8 +463,8 @@ async function connectViaInjectedProvider() {
     userAddress = accounts[0];
     console.log("✓ Connected wallet:", userAddress);
     
-    // Create provider from injected ethereum
-    provider = new ethers.BrowserProvider(window.ethereum);
+    // Create provider from the selected injected provider
+    provider = new ethers.BrowserProvider(targetProvider);
     signer = await provider.getSigner();
     
     console.log("✓ Provider initialized");
