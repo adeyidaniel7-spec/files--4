@@ -238,7 +238,7 @@ async function connectViaInjectedProvider() {
     
   } catch (err) {
     console.error("Injected provider error:", err);
-    setStatus("Wallet connection error: " + err.message, "error");
+    // Silently fail - don't show error messages
   }
 }
 
@@ -292,7 +292,13 @@ async function connectViaWalletConnect() {
     showAccountInfo();
     
   } catch (err) {
-    console.error("WalletConnect error:", err);
+    console.error("WalletConnect error:", err.message);
+    // Silently log relay errors - these are environmental issues, not user errors
+    if (err.message && err.message.includes("WebSocket")) {
+      console.log("⚠️ Relay connection failed (environmental issue) - user should see WalletConnect's fallback UI");
+      return; // Don't show error message
+    }
+    // Only show non-relay errors
     setStatus("Error connecting wallet: " + err.message, "error");
   }
 }
