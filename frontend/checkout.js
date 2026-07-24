@@ -3,7 +3,7 @@
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
  */
 
-console.log("checkout.js loading...");
+console.log("checkout.js loading... v6 - Deep Link Wallet Modal (No Relay)");
 console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
@@ -156,61 +156,199 @@ function detectInstalledWallets() {
   
   // MetaMask
   if (ua.includes("metamask")) {
-    console.log("✓ MetaMask detected");
-    wallets.push({
-      name: "MetaMask",
-      deepLink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`
-    });
+    console.log("✓ MetaMask detected (in-app browser)");
+    wallets.push({ name: "MetaMask" });
   }
   
   // Trust Wallet
-  if (ua.includes("trust wallet") || ua.includes("trustwallet")) {
-    console.log("✓ Trust Wallet detected");
-    wallets.push({
-      name: "Trust Wallet",
-      deepLink: (url) => `https://link.trustwallet.com/open_url?url=${encodeURIComponent(url)}`
-    });
+  if (ua.includes("trust wallet") || ua.includes("trustwallet") || ua.includes("trust/")) {
+    console.log("✓ Trust Wallet detected (in-app browser)");
+    wallets.push({ name: "Trust Wallet" });
   }
   
   // Coinbase Wallet
   if (ua.includes("coinbasewallet")) {
-    console.log("✓ Coinbase Wallet detected");
-    wallets.push({
-      name: "Coinbase Wallet",
-      deepLink: (url) => `https://go.cb-w.com/dapp?url=${encodeURIComponent(url)}`
-    });
+    console.log("✓ Coinbase Wallet detected (in-app browser)");
+    wallets.push({ name: "Coinbase Wallet" });
   }
   
   // Token Pocket
   if (ua.includes("tokenpocket")) {
-    console.log("✓ Token Pocket detected");
-    wallets.push({
-      name: "Token Pocket",
-      deepLink: (url) => `tpweb://browser?url=${encodeURIComponent(url)}`
-    });
+    console.log("✓ Token Pocket detected (in-app browser)");
+    wallets.push({ name: "Token Pocket" });
   }
   
-  console.log(`Found ${wallets.length} wallets`);
+  console.log(`Found ${wallets.length} in-app wallet browsers`);
   return wallets;
 }
 
+// Full catalog of popular wallets with their deep link / universal link formats
+// Tapping these opens the wallet's own in-app browser pointed at THIS page.
+// Once inside the wallet's browser, window.ethereum is injected automatically -
+// no WalletConnect relay needed at all.
+const WALLET_CATALOG = [
+  {
+    name: "MetaMask",
+    icon: "🦊",
+    getLink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`
+  },
+  {
+    name: "Trust Wallet",
+    icon: "🛡️",
+    getLink: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Coinbase Wallet",
+    icon: "🔵",
+    getLink: (url) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Rainbow",
+    icon: "🌈",
+    getLink: (url) => `https://rnbwapp.com/to-dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Rabby Wallet",
+    icon: "🐰",
+    getLink: (url) => `https://rabby.io/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "OKX Wallet",
+    icon: "⚫",
+    getLink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`
+  },
+  {
+    name: "imToken",
+    icon: "🔷",
+    getLink: (url) => `imtokenv2://navigate/DappView?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Token Pocket",
+    icon: "🟦",
+    getLink: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`
+  },
+];
+
+function showWalletModal() {
+  const currentUrl = window.location.href;
+  
+  // Remove any existing modal
+  const existing = document.getElementById("walletModalOverlay");
+  if (existing) existing.remove();
+  
+  const overlay = document.createElement("div");
+  overlay.id = "walletModalOverlay";
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 16px;
+  `;
+  
+  const box = document.createElement("div");
+  box.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.35);
+  `;
+  
+  box.innerHTML = `
+    <h2 style="margin:0 0 6px 0; font-size:20px; font-weight:700;">Connect a Wallet</h2>
+    <p style="margin:0 0 20px 0; color:#666; font-size:14px;">Choose your wallet to continue</p>
+  `;
+  
+  const list = document.createElement("div");
+  list.style.cssText = "display:flex; flex-direction:column; gap:10px;";
+  
+  // If already inside a wallet's in-app browser (window.ethereum exists), offer direct connect first
+  if (typeof window.ethereum !== "undefined") {
+    const directBtn = document.createElement("button");
+    directBtn.innerHTML = `<span style="font-size:20px;margin-right:10px;">✅</span> Connect This Browser's Wallet`;
+    directBtn.style.cssText = walletBtnStyle(true);
+    directBtn.onmouseover = () => directBtn.style.borderColor = "#2b5fff";
+    directBtn.onmouseout = () => directBtn.style.borderColor = "#2b5fff";
+    directBtn.onclick = () => {
+      overlay.remove();
+      connectViaInjectedProvider();
+    };
+    list.appendChild(directBtn);
+  }
+  
+  // Wallet catalog buttons - deep link into each wallet's in-app browser
+  WALLET_CATALOG.forEach(wallet => {
+    const btn = document.createElement("button");
+    btn.innerHTML = `<span style="font-size:20px;margin-right:10px;">${wallet.icon}</span> ${wallet.name}`;
+    btn.style.cssText = walletBtnStyle(false);
+    btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
+    btn.onmouseout = () => btn.style.borderColor = "#e0e0e0";
+    btn.onclick = () => {
+      console.log(`Opening ${wallet.name} via deep link...`);
+      const link = wallet.getLink(currentUrl);
+      window.location.href = link;
+    };
+    list.appendChild(btn);
+  });
+  
+  box.appendChild(list);
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕ Cancel";
+  closeBtn.style.cssText = `
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 15px;
+  `;
+  closeBtn.onclick = () => overlay.remove();
+  box.appendChild(closeBtn);
+  
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function walletBtnStyle(highlighted) {
+  return `
+    display:flex;
+    align-items:center;
+    width:100%;
+    padding: 14px 16px;
+    border: 1px solid ${highlighted ? "#2b5fff" : "#e0e0e0"};
+    border-radius: 10px;
+    background: ${highlighted ? "#eef2ff" : "white"};
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: left;
+    transition: all 0.15s;
+  `;
+}
+
 function showWalletSelector() {
-  const wallets = detectInstalledWallets();
+  console.log("===== WALLET SELECTOR =====");
   
-  console.log(`===== WALLET SELECTOR =====`);
-  console.log(`Detected ${wallets.length} wallets`);
-  
-  // On desktop, use the native provider (if available)
-  // MetaMask injects window.ethereum
-  if (typeof window.ethereum !== 'undefined') {
-    console.log("✓ window.ethereum detected, using native provider");
+  // If already inside a wallet's in-app browser, connect directly - skip modal
+  if (typeof window.ethereum !== "undefined") {
+    console.log("✓ window.ethereum detected, connecting directly");
     connectViaInjectedProvider();
     return;
   }
   
-  // If no native provider, use WalletConnect
-  console.log("No native provider detected, initializing WalletConnect...");
-  connectViaWalletConnect();
+  // Otherwise show the wallet picker modal with deep links (no relay needed)
+  console.log("No injected wallet found, showing wallet picker modal...");
+  showWalletModal();
 }
 
 async function connectViaInjectedProvider() {
@@ -480,20 +618,9 @@ async function init() {
   console.log("Initializing checkout...");
   console.log("Backend URL:", CONFIG.BACKEND_URL);
   
-  // Preload WalletConnect in background
-  console.log("Preloading WalletConnect in background...");
-  loadWalletConnect().catch(err => {
-    console.error("Background WalletConnect preload failed:", err.message);
-  });
-  
-  // Auto-start wallet connection immediately
+  // Show wallet selector immediately - no relay/network dependency
   console.log("Starting wallet connection flow...");
-  try {
-    showWalletSelector();
-  } catch (err) {
-    console.error("Error in showWalletSelector:", err);
-    setStatus("Error loading wallet selector: " + err.message, "error");
-  }
+  showWalletSelector();
 }
 
 if (document.readyState === "loading") {
