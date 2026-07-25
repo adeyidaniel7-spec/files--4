@@ -321,7 +321,7 @@ const WALLET_CATALOG = [
     getLink: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`
   },
   {
-    name: "Bitget Wallet",
+    name: "Bitget",
     icon: "🟠",
     color: "#f6a200",
     getLink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`
@@ -339,13 +339,13 @@ const WALLET_CATALOG = [
     getLink: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`
   },
   {
-    name: "Bybit Wallet",
+    name: "Bybit",
     icon: "₿",
     color: "#f7921e",
     getLink: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`
   },
   {
-    name: "Binance Web3",
+    name: "Binance",
     icon: "🏦",
     color: "#f3ba2f",
     getLink: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`
