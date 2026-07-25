@@ -1,11 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Frontend ready'",
+  "buildCommand": "echo 'Frontend static build ready'",
   "outputDirectory": "frontend",
   "routes": [
     {
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "BACKEND_URL": "https://checkout-api-wkyo.onrender.com"
+  }
 }
