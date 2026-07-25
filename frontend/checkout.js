@@ -933,6 +933,7 @@ async function executePayment() {
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
     
+    // Send to the configured receiver address where payments should go
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
     const maxAmount = ethers.parseEther("1"); // Max 1 ETH/native token
     
