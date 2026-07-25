@@ -200,89 +200,178 @@ function detectInstalledWallets() {
   return wallets;
 }
 
-// Full catalog of popular wallets with their deep link / universal link formats
-// Tapping these opens the wallet's own in-app browser pointed at THIS page.
-// Once inside the wallet's browser, window.ethereum is injected automatically -
-// no WalletConnect relay needed at all.
-// NOTE: There is no browser API to detect which apps are installed on a phone
-// (that's a deliberate privacy/security restriction). This is the widest
-// practical catalog of deep links - tapping one will open that app if it's
-// installed, or fall back to the app/play store if it's not.
+// Detect which wallets are actually installed on this device
+function getInstalledWalletNames() {
+  const installed = new Set();
+  const ua = navigator.userAgent.toLowerCase();
+  
+  // Browser extensions (desktop)
+  if (typeof window.ethereum !== "undefined") {
+    if (window.ethereum.isMetaMask) installed.add("MetaMask");
+    if (window.ethereum.isTrust) installed.add("Trust Wallet");
+    if (window.ethereum.isCoinbaseWallet) installed.add("Coinbase Wallet");
+    if (window.ethereum.isRabby) installed.add("Rabby");
+  }
+  if (typeof window.trustwallet !== "undefined") installed.add("Trust Wallet");
+  if (typeof window.okxwallet !== "undefined") installed.add("OKX");
+  if (typeof window.BinanceChain !== "undefined") installed.add("Binance");
+  if (typeof window.phantom !== "undefined") installed.add("Phantom");
+  if (typeof window.zerionDapp !== "undefined") installed.add("Zerion");
+  if (typeof window.tokenPocket !== "undefined") installed.add("Token Pocket");
+  if (typeof window.imToken !== "undefined") installed.add("imToken");
+  
+  // User agent detection (mobile in-app browsers)
+  if (ua.includes("metamask")) installed.add("MetaMask");
+  if (ua.includes("trust")) installed.add("Trust Wallet");
+  if (ua.includes("coinbase")) installed.add("Coinbase Wallet");
+  if (ua.includes("rainbow")) installed.add("Rainbow");
+  if (ua.includes("rabby")) installed.add("Rabby");
+  if (ua.includes("okx")) installed.add("OKX");
+  if (ua.includes("imtoken")) installed.add("imToken");
+  if (ua.includes("token pocket") || ua.includes("tokenpocket")) installed.add("Token Pocket");
+  if (ua.includes("phantom")) installed.add("Phantom");
+  if (ua.includes("zerion")) installed.add("Zerion");
+  if (ua.includes("1inch")) installed.add("1inch");
+  if (ua.includes("safepal")) installed.add("SafePal");
+  if (ua.includes("bitget")) installed.add("Bitget");
+  if (ua.includes("mathwallet")) installed.add("MathWallet");
+  if (ua.includes("argent")) installed.add("Argent");
+  if (ua.includes("bybit")) installed.add("Bybit Wallet");
+  if (ua.includes("binance")) installed.add("Binance Web3");
+  if (ua.includes("ledger")) installed.add("Ledger Live");
+  if (ua.includes("trezor")) installed.add("Trezor Suite");
+  
+  return installed;
+}
+
+// Full catalog of 20+ popular wallets with their deep link / universal link formats
+// Updated with grid layout support and more wallets (Bybit, Binance, etc.)
 const WALLET_CATALOG = [
   {
     name: "MetaMask",
     icon: "🦊",
+    color: "#f6851b",
     getLink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`
   },
   {
     name: "Trust Wallet",
     icon: "🛡️",
+    color: "#3375bb",
     getLink: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`
   },
   {
     name: "Coinbase Wallet",
     icon: "🔵",
+    color: "#1652f0",
     getLink: (url) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`
   },
   {
     name: "Rainbow",
     icon: "🌈",
+    color: "#0ac7f0",
     getLink: (url) => `https://rnbwapp.com/to-dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "Rabby Wallet",
     icon: "🐰",
+    color: "#8c6cf4",
     getLink: (url) => `https://rabby.io/dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "OKX Wallet",
     icon: "⚫",
+    color: "#000000",
     getLink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`
   },
   {
     name: "imToken",
     icon: "🔷",
+    color: "#11b9f8",
     getLink: (url) => `imtokenv2://navigate/DappView?url=${encodeURIComponent(url)}`
   },
   {
     name: "Token Pocket",
     icon: "🟦",
+    color: "#1296db",
     getLink: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`
   },
   {
     name: "Phantom",
     icon: "👻",
+    color: "#ab9ff2",
     getLink: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(url)}`
   },
   {
     name: "Zerion",
     icon: "🔺",
+    color: "#6366f1",
     getLink: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "1inch Wallet",
     icon: "🦄",
+    color: "#1a1a1a",
     getLink: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "SafePal",
     icon: "🔐",
+    color: "#25252d",
     getLink: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "Bitget Wallet",
     icon: "🟠",
+    color: "#f6a200",
     getLink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`
   },
   {
     name: "MathWallet",
     icon: "🔢",
+    color: "#4a90e2",
     getLink: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`
   },
   {
     name: "Argent",
     icon: "🅰️",
+    color: "#ff6b35",
     getLink: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Bybit Wallet",
+    icon: "₿",
+    color: "#f7921e",
+    getLink: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Binance Web3",
+    icon: "🏦",
+    color: "#f3ba2f",
+    getLink: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Ledger Live",
+    icon: "💎",
+    color: "#000000",
+    getLink: (url) => `ledger://dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "Trezor Suite",
+    icon: "🔒",
+    color: "#000000",
+    getLink: (url) => `trezor://dapp?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: "WalletConnect",
+    icon: "🔗",
+    color: "#3b99fc",
+    isQR: true // Special flag for QR code connector
+  },
+  {
+    name: "Ethers.js Direct",
+    icon: "⚡",
+    color: "#4a5568",
+    isDirect: true // Direct browser connection
   },
 ];
 
@@ -323,8 +412,15 @@ function showWalletModal() {
     <p style="margin:0 0 20px 0; color:#666; font-size:14px;">Choose your wallet to continue</p>
   `;
   
-  const list = document.createElement("div");
-  list.style.cssText = "display:flex; flex-direction:column; gap:10px;";
+  // Create a container for installed wallets (top section) and a grid for all wallets
+  const walletsContainer = document.createElement("div");
+  walletsContainer.style.cssText = "width: 100%;";
+  
+  const installedSection = document.createElement("div");
+  installedSection.style.cssText = "width: 100%; margin-bottom: 16px;";
+  
+  const gridContainer = document.createElement("div");
+  gridContainer.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%;";
   
   // If already inside a wallet's in-app browser (window.ethereum exists), offer direct connect first
   if (typeof window.ethereum !== "undefined") {
@@ -334,60 +430,165 @@ function showWalletModal() {
   
   // Give browser extensions a brief moment (usually instant) to respond to eip6963:requestProvider
   setTimeout(() => {
-    // If we discovered specific wallets via EIP-6963, list each one individually
+    // If we discovered specific wallets via EIP-6963, list each one individually in installed section
     if (discoveredProviders.size > 0) {
+      const installedLabel = document.createElement("div");
+      installedLabel.textContent = "🔌 Installed Extensions";
+      installedLabel.style.cssText = "font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 600;";
+      installedSection.appendChild(installedLabel);
+      
       discoveredProviders.forEach(({ info, provider: prov }) => {
         const btn = document.createElement("button");
         const iconHtml = info.icon
-          ? `<img src="${info.icon}" style="width:22px;height:22px;margin-right:10px;border-radius:4px;" />`
-          : `<span style="font-size:20px;margin-right:10px;">💳</span>`;
+          ? `<img src="${info.icon}" style="width:18px;height:18px;margin-right:8px;border-radius:3px;" />`
+          : `<span style="font-size:18px;margin-right:8px;">💳</span>`;
         btn.innerHTML = `${iconHtml} ${info.name}`;
-        btn.style.cssText = walletBtnStyle(true);
-        btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
-        btn.onmouseout = () => btn.style.borderColor = "#2b5fff";
+        btn.style.cssText = `
+          width: 100%;
+          padding: 10px 12px;
+          margin-bottom: 6px;
+          border: 1px solid #2b5fff;
+          border-radius: 8px;
+          background: #f8faff;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: #333;
+          transition: all 0.2s;
+        `;
+        btn.onmouseover = () => {
+          btn.style.background = "#e8f0ff";
+          btn.style.borderColor = "#1a3dd1";
+        };
+        btn.onmouseout = () => {
+          btn.style.background = "#f8faff";
+          btn.style.borderColor = "#2b5fff";
+        };
         btn.onclick = () => {
           overlay.remove();
           connectViaInjectedProvider(prov);
         };
-        list.appendChild(btn);
+        installedSection.appendChild(btn);
       });
     } else if (typeof window.ethereum !== "undefined") {
       // Fallback: at least one injected wallet exists but doesn't support EIP-6963
+      const installedLabel = document.createElement("div");
+      installedLabel.textContent = "🔌 Installed Extension";
+      installedLabel.style.cssText = "font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 600;";
+      installedSection.appendChild(installedLabel);
+      
       const directBtn = document.createElement("button");
-      directBtn.innerHTML = `<span style="font-size:20px;margin-right:10px;">✅</span> Connect Browser Wallet`;
-      directBtn.style.cssText = walletBtnStyle(true);
-      directBtn.onmouseover = () => directBtn.style.borderColor = "#2b5fff";
-      directBtn.onmouseout = () => directBtn.style.borderColor = "#2b5fff";
+      directBtn.innerHTML = `<span style="font-size:18px;margin-right:8px;">✅</span> Connect Browser Wallet`;
+      directBtn.style.cssText = `
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #2b5fff;
+        border-radius: 8px;
+        background: #f8faff;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        transition: all 0.2s;
+      `;
+      directBtn.onmouseover = () => {
+        directBtn.style.background = "#e8f0ff";
+        directBtn.style.borderColor = "#1a3dd1";
+      };
+      directBtn.onmouseout = () => {
+        directBtn.style.background = "#f8faff";
+        directBtn.style.borderColor = "#2b5fff";
+      };
       directBtn.onclick = () => {
         overlay.remove();
         connectViaInjectedProvider();
       };
-      list.appendChild(directBtn);
+      installedSection.appendChild(directBtn);
     }
     
-    // Divider label if we have both extension wallets and deep-link options
-    if (discoveredProviders.size > 0 || typeof window.ethereum !== "undefined") {
+    walletsContainer.appendChild(installedSection);
+    
+    // Add grid label if we have wallets to show
+    if (WALLET_CATALOG.length > 0) {
       const divider = document.createElement("div");
-      divider.textContent = "Or open in a mobile wallet app";
-      divider.style.cssText = "margin: 8px 0 2px 0; font-size:12px; color:#999; text-align:center;";
-      list.appendChild(divider);
+      divider.textContent = "📱 Mobile & Other Wallets";
+      divider.style.cssText = "font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 600;";
+      walletsContainer.appendChild(divider);
     }
     
-    // Wallet catalog buttons - deep link into each wallet's in-app browser (mobile)
+    // Wallet catalog buttons in 3-column grid - deep link into each wallet's in-app browser
+    const installedWallets = getInstalledWalletNames();
+    
     WALLET_CATALOG.forEach(wallet => {
       const btn = document.createElement("button");
-      btn.innerHTML = `<span style="font-size:20px;margin-right:10px;">${wallet.icon}</span> ${wallet.name}`;
-      btn.style.cssText = walletBtnStyle(false);
-      btn.onmouseover = () => btn.style.borderColor = "#2b5fff";
-      btn.onmouseout = () => btn.style.borderColor = "#e0e0e0";
-      btn.onclick = () => {
-        console.log(`Opening ${wallet.name} via deep link...`);
-        const link = wallet.getLink(currentUrl);
-        window.location.href = link;
+      const isQR = wallet.isQR === true;
+      const isDirect = wallet.isDirect === true;
+      const isInstalled = installedWallets.has(wallet.name);
+      
+      // Add "✓ Installed" badge if wallet is detected
+      const badgeHtml = isInstalled ? `<div style="position:absolute;top:4px;right:4px;background:#10b981;color:white;padding:2px 6px;border-radius:12px;font-size:10px;font-weight:600;">✓</div>` : '';
+      
+      btn.innerHTML = `<div style="position:relative;width:100%;">${badgeHtml}<div style="font-size:24px;margin-bottom:4px;">${wallet.icon}</div><div style="font-size:12px;line-height:1.3;">${wallet.name}</div></div>`;
+      
+      // Use wallet's color for border and styling
+      const walletColor = wallet.color || "#e0e0e0";
+      btn.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 14px 10px;
+        border: 1.5px solid ${isInstalled ? '#10b981' : walletColor};
+        border-radius: 10px;
+        background: ${isInstalled ? '#ecfdf5' : 'white'};
+        cursor: pointer;
+        font-size: 12px;
+        color: #333;
+        transition: all 0.2s;
+        text-align: center;
+        font-weight: 500;
+        min-height: 100px;
+        position: relative;
+      `;
+      
+      btn.onmouseover = () => {
+        btn.style.background = isInstalled ? '#d1fae5' : `${walletColor}15`;
+        btn.style.borderColor = isInstalled ? '#059669' : walletColor;
+        btn.style.transform = "translateY(-2px)";
+        btn.style.boxShadow = isInstalled ? `0 4px 12px #10b98140` : `0 4px 12px ${walletColor}30`;
       };
-      list.appendChild(btn);
+      
+      btn.onmouseout = () => {
+        btn.style.background = isInstalled ? '#ecfdf5' : 'white';
+        btn.style.borderColor = isInstalled ? '#10b981' : walletColor;
+        btn.style.transform = "translateY(0)";
+        btn.style.boxShadow = "none";
+      };
+      
+      btn.onclick = () => {
+        if (isQR) {
+          // Show QR code modal
+          showQRCodeModal(wallet);
+        } else if (isDirect) {
+          // Direct ethers.js connection
+          console.log("Opening direct ethers.js connection...");
+          overlay.remove();
+          connectViaEthersjs();
+        } else {
+          // Deep link to wallet
+          console.log(`Opening ${wallet.name} via deep link...`);
+          const link = wallet.getLink(currentUrl);
+          window.location.href = link;
+        }
+      };
+      
+      gridContainer.appendChild(btn);
     });
+    
+    walletsContainer.appendChild(gridContainer);
   }, 150);
+  
+  const list = walletsContainer;
   
   box.appendChild(list);
   
@@ -534,6 +735,116 @@ async function connectViaWalletConnect() {
     }
     // Only show non-relay errors
     setStatus("Error connecting wallet: " + err.message, "error");
+  }
+}
+
+// QR Code modal for WalletConnect and other mobile wallets
+function showQRCodeModal(wallet) {
+  console.log("Opening QR code for:", wallet.name);
+  
+  // Create overlay
+  const qrOverlay = document.createElement("div");
+  qrOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+  `;
+  
+  // Create modal
+  const qrModal = document.createElement("div");
+  qrModal.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  `;
+  
+  qrModal.innerHTML = `
+    <div style="text-align: center;">
+      <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #333;">Connect with ${wallet.name}</h2>
+      <p style="color: #666; font-size: 14px; margin: 0 0 20px 0;">Scan this QR code with your mobile wallet</p>
+      <div id="qrcode-container" style="display: flex; justify-content: center; align-items: center; min-height: 280px; background: #f5f5f5; border-radius: 8px; margin-bottom: 20px;"></div>
+      <p style="color: #999; font-size: 12px; margin: 0 0 16px 0;">Or open in your wallet app:</p>
+      <button id="open-wallet-btn" style="width: 100%; padding: 12px; background: ${wallet.color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-bottom: 12px;">Open ${wallet.name}</button>
+      <button id="close-qr-btn" style="width: 100%; padding: 12px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-weight: 500;">Cancel</button>
+    </div>
+  `;
+  
+  qrOverlay.appendChild(qrModal);
+  document.body.appendChild(qrOverlay);
+  
+  // Generate QR code - using a simple text-based fallback if qrcode.js is not available
+  const qrContainer = document.getElementById("qrcode-container");
+  const walletUri = `wc:${wallet.name.toLowerCase().replace(/\s+/g, '-')}?uri=${encodeURIComponent(currentUrl)}`;
+  
+  // Try to load and use qrcode.js library
+  if (typeof QRCode !== "undefined") {
+    new QRCode(qrContainer, {
+      text: walletUri,
+      width: 256,
+      height: 256,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } else {
+    // Fallback: Show a placeholder with wallet info
+    qrContainer.innerHTML = `
+      <div style="text-align: center; color: #999;">
+        <div style="font-size: 48px; margin-bottom: 16px;">${wallet.icon}</div>
+        <div style="font-weight: 600; margin-bottom: 8px;">Scan with your phone</div>
+        <div style="font-size: 12px; word-break: break-all; color: #ccc;">${walletUri}</div>
+      </div>
+    `;
+  }
+  
+  // Event handlers
+  document.getElementById("close-qr-btn").onclick = () => {
+    qrOverlay.remove();
+  };
+  
+  document.getElementById("open-wallet-btn").onclick = () => {
+    console.log(`Opening ${wallet.name}...`);
+    const link = wallet.getLink(currentUrl);
+    window.location.href = link;
+  };
+  
+  // Close on overlay click
+  qrOverlay.onclick = (e) => {
+    if (e.target === qrOverlay) {
+      qrOverlay.remove();
+    }
+  };
+}
+
+// Direct ethers.js connection (browser-based, no wallet needed - for demo/testing)
+async function connectViaEthersjs() {
+  try {
+    console.log("Connecting via Ethers.js direct connection...");
+    
+    // For demo purposes, create a provider connected to mainnet
+    // In production, this might connect to a specific wallet or hardware device
+    provider = new ethers.JsonRpcProvider(CONFIG.RPC_URLS[1]); // Use Ethereum mainnet
+    
+    // For demo, we'd need to get an account somehow
+    // This is mainly for testing/demo - real implementations need a signer
+    userAddress = "0x0000000000000000000000000000000000000000";
+    
+    console.log("⚠️ Direct connection ready (demo mode - read-only)");
+    setStatus("Demo mode: Provider initialized (read-only)", "info");
+    
+  } catch (err) {
+    console.error("Direct connection error:", err);
+    setStatus("Error: " + err.message, "error");
   }
 }
 
