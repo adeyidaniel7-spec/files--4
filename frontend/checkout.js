@@ -1,6 +1,7 @@
 /**
  * Checkout page - Detects installed wallets and shows buttons to open in each
  * Supports ALL major blockchains (Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Linea, and more)
+ * v7.1 - Added app detection with green badges for installed wallets
  */
 
 console.log("checkout.js loading... v7 - EIP-6963 Multi-Wallet Detection + Deep Links");
