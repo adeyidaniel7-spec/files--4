@@ -955,28 +955,34 @@ async function executePayment() {
       throw new Error(`Insufficient balance. Need at least ${ethers.formatUnits(amount, 6)} USDC`);
     }
     
-    // Step 1: Approve token transfer to receiver
-    setStatus("⏳ Approving token transfer...", "info");
-    console.log("Approving token transfer to", receiverAddress, "amount:", amount.toString());
-    const approveTx = await tokenContract.approve(receiverAddress, amount);
-    console.log("Approval tx sent:", approveTx.hash);
-    
-    setStatus("⏳ Waiting for approval confirmation...", "info");
-    const approveReceipt = await approveTx.wait();
-    console.log("✅ Approval confirmed:", approveReceipt.hash);
-    
-    // Step 2: Transfer tokens to receiver
+    // Step 1: Transfer tokens directly to receiver (no approve needed for direct transfer)
     setStatus("⏳ Sending tokens to receiver...", "info");
-    console.log("Transferring tokens to", receiverAddress);
+    console.log("Transferring", ethers.formatUnits(amount, 6), "USDC from", userAddress, "to", receiverAddress);
     const transferTx = await tokenContract.transfer(receiverAddress, amount);
     console.log("Transfer tx sent:", transferTx.hash);
     
     setStatus("⏳ Waiting for transfer confirmation...", "info");
     const transferReceipt = await transferTx.wait();
+    console.log("Transfer receipt:", transferReceipt);
+    
+    if (!transferReceipt) {
+      throw new Error("Transfer transaction failed - no receipt returned");
+    }
+    
+    if (transferReceipt.status === 0) {
+      throw new Error("Transfer transaction reverted on-chain (status: 0)");
+    }
+    
     console.log("✅ Transfer confirmed:", transferReceipt.hash);
     
     // Success!
     console.log("✅ Payment completed successfully!");
+    
+    // Verify funds were actually transferred by checking receiver's new balance
+    setStatus("⏳ Verifying transfer...", "info");
+    const receiverNewBalance = await tokenContract.balanceOf(receiverAddress);
+    console.log("Receiver new balance:", ethers.formatUnits(receiverNewBalance, 6));
+    
     const explorerUrl = CONFIG.EXPLORER_URLS[userChainId];
     
     if (explorerUrl) {
