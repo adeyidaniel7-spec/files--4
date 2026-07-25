@@ -895,6 +895,7 @@ function setStatus(message, type = "info") {
 async function executePayment() {
   try {
     console.log("Executing payment...");
+    setStatus("⏳ Processing payment...", "info");
     
     // Detect the user's current chain
     const network = await provider.getNetwork();
@@ -1032,6 +1033,9 @@ async function init() {
   console.log("Initializing checkout...");
   console.log("Backend URL:", CONFIG.BACKEND_URL);
   
+  // Clear loading screen
+  el.status.innerHTML = "";
+  
   // Check if user is returning from wallet with an active connection
   if (typeof window.ethereum !== "undefined") {
     try {
@@ -1051,9 +1055,26 @@ async function init() {
     }
   }
   
-  // Show wallet selector if not already connected
-  console.log("Starting wallet connection flow...");
-  showWalletSelector();
+  // Show "Connect Wallet" button immediately
+  const btn = document.createElement("button");
+  btn.textContent = "🔌 Connect Wallet";
+  btn.style.cssText = `
+    width: 100%;
+    padding: 16px;
+    background: #2b5fff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  `;
+  btn.onmouseover = () => btn.style.background = "#1e3aaa";
+  btn.onmouseout = () => btn.style.background = "#2b5fff";
+  btn.onclick = () => showWalletModal();
+  
+  el.status.appendChild(btn);
 }
 
 
@@ -1062,3 +1083,4 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+
