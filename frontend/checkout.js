@@ -67,6 +67,18 @@ const CONFIG = {
       name: "Linea",
       tokenAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // Linea USDC
     },
+  },
+  
+  // Block explorer URLs for each network
+  EXPLORER_URLS: {
+    1: "https://etherscan.io",
+    11155111: "https://sepolia.etherscan.io",
+    137: "https://polygonscan.com",
+    56: "https://bscscan.com",
+    10: "https://optimistic.etherscan.io",
+    42161: "https://arbiscan.io",
+    8453: "https://basescan.org",
+    59144: "https://lineascan.build"
   }
 };
 
