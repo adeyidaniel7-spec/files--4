@@ -576,10 +576,16 @@ function showWalletModal() {
           overlay.remove();
           connectViaEthersjs();
         } else {
-          // Deep link to wallet
+          // Deep link to wallet - open in wallet's browser
+          overlay.remove();
           console.log(`Opening ${wallet.name} via deep link...`);
           const link = wallet.getLink(currentUrl);
-          window.location.href = link;
+          console.log("Deep link:", link);
+          
+          // Use window.location for deep links to ensure wallet app opens
+          setTimeout(() => {
+            window.location.href = link;
+          }, 300);
         }
       };
       
@@ -1026,10 +1032,30 @@ async function init() {
   console.log("Initializing checkout...");
   console.log("Backend URL:", CONFIG.BACKEND_URL);
   
-  // Show wallet selector immediately - no relay/network dependency
+  // Check if user is returning from wallet with an active connection
+  if (typeof window.ethereum !== "undefined") {
+    try {
+      console.log("Wallet extension detected, attempting auto-connection...");
+      // Try to get accounts without prompting
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accounts && accounts.length > 0) {
+        console.log("User already connected, auto-connecting...");
+        userAddress = accounts[0];
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        showAccountInfo();
+        return; // Don't show wallet selector, go straight to payment
+      }
+    } catch (err) {
+      console.log("Auto-connect failed, showing wallet selector:", err.message);
+    }
+  }
+  
+  // Show wallet selector if not already connected
   console.log("Starting wallet connection flow...");
   showWalletSelector();
 }
+
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
