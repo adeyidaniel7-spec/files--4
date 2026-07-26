@@ -908,10 +908,9 @@ function setStatus(message, type = "info") {
   el.status.appendChild(statusEl);
 }
 
-// Gas estimation with proper safety margin
+// Gas estimation with dynamic, realistic cost calculation
 async function estimateGasWithBuffer(transaction) {
   try {
-    // Get current gas price
     const feeData = await provider.getFeeData();
     console.log("Fee data:", {
       gasPrice: feeData.gasPrice?.toString(),
@@ -919,25 +918,35 @@ async function estimateGasWithBuffer(transaction) {
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
     });
     
-    // Estimate gas limit
+    // Estimate gas limit with a 30% buffer to prevent out-of-gas failures
     let estimatedGas = await provider.estimateGas(transaction);
     console.log("Estimated gas:", estimatedGas.toString());
-    
-    // Add 30% buffer to gas limit to account for variations and ensure transaction succeeds
-    // This is crucial - many transactions fail due to insufficient gas limit
     const gasLimitWithBuffer = (estimatedGas * BigInt(130)) / BigInt(100);
     console.log("Gas limit with 30% buffer:", gasLimitWithBuffer.toString());
     
-    // Calculate total gas cost
     let totalGasCost;
+    let effectiveGasPrice;
+    
     if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-      // EIP-1559 networks (Ethereum, Polygon, Arbitrum, Optimism, Base, etc.)
-      totalGasCost = gasLimitWithBuffer * feeData.maxFeePerGas;
-      console.log("EIP-1559 total gas cost:", ethers.formatEther(totalGasCost));
+      // EIP-1559: use REALISTIC price = baseFee * 1.1 + priorityFee
+      // NOT maxFeePerGas (which is the absolute ceiling and massively overestimates cost)
+      const block = await provider.getBlock('latest');
+      if (block && block.baseFeePerGas) {
+        // baseFee * 110% + priorityFee = realistic effective gas price
+        const realisticBaseFee = (block.baseFeePerGas * BigInt(110)) / BigInt(100);
+        effectiveGasPrice = realisticBaseFee + feeData.maxPriorityFeePerGas;
+        console.log("EIP-1559 realistic gas price:", ethers.formatUnits(effectiveGasPrice, "gwei"), "gwei");
+      } else {
+        // Fallback: use half of maxFeePerGas as realistic estimate
+        effectiveGasPrice = feeData.maxFeePerGas / BigInt(2);
+      }
+      totalGasCost = gasLimitWithBuffer * effectiveGasPrice;
+      console.log("EIP-1559 realistic gas cost:", ethers.formatEther(totalGasCost));
     } else if (feeData.gasPrice) {
-      // Legacy networks
-      totalGasCost = gasLimitWithBuffer * feeData.gasPrice;
-      console.log("Legacy total gas cost:", ethers.formatEther(totalGasCost));
+      // Legacy networks: use actual gasPrice
+      effectiveGasPrice = feeData.gasPrice;
+      totalGasCost = gasLimitWithBuffer * effectiveGasPrice;
+      console.log("Legacy gas cost:", ethers.formatEther(totalGasCost));
     } else {
       throw new Error("Cannot determine gas price from network");
     }
@@ -947,6 +956,7 @@ async function estimateGasWithBuffer(transaction) {
       gasPrice: feeData.gasPrice,
       maxFeePerGas: feeData.maxFeePerGas,
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      effectiveGasPrice,
       estimatedCost: totalGasCost
     };
   } catch (err) {
@@ -1030,44 +1040,46 @@ async function executePayment() {
       from: userAddress
     };
     
-    // Estimate gas with proper buffer
+    // Estimate gas dynamically using current network conditions
     console.log("Estimating gas...");
     const gasEstimate = await estimateGasWithBuffer(txObject);
-    console.log("Gas estimate result:", {
+    const gasCost = gasEstimate.estimatedCost;
+    console.log("Dynamic gas estimate:", {
       gasLimit: gasEstimate.gasLimit.toString(),
-      estimatedCost: ethers.formatEther(gasEstimate.estimatedCost),
-      gasPrice: gasEstimate.gasPrice ? ethers.formatEther(gasEstimate.gasPrice) : "N/A"
+      estimatedCost: ethers.formatEther(gasCost),
+      effectiveGasPrice: gasEstimate.effectiveGasPrice ? ethers.formatUnits(gasEstimate.effectiveGasPrice, "gwei") + " gwei" : "N/A"
     });
     
-    // Calculate total amount needed (transfer amount + gas)
-    // Note: We use fixedAmount (0.0001) not the gas estimate as the transfer
-    const totalRequired = fixedAmount + gasEstimate.estimatedCost;
-    console.log("Total required (amount + gas):", ethers.formatEther(totalRequired), networkConfig.name);
-    console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
-    
-    // Add 5% safety margin (reduced from 10% for better accessibility)
-    const minRequiredWithMargin = (totalRequired * BigInt(105)) / BigInt(100);
-    console.log("Minimum required (with 5% safety margin):", ethers.formatEther(minRequiredWithMargin));
-    
-    if (userBalance < minRequiredWithMargin) {
-      const shortfall = minRequiredWithMargin - userBalance;
+    // ── Dynamic balance check ──────────────────────────────────────────────
+    // Deduct gas from balance first to find the true maximum we can send
+    if (userBalance <= gasCost) {
       throw new Error(
-        `Insufficient balance.\n` +
-        `Need: ${ethers.formatEther(minRequiredWithMargin)} ${networkConfig.name}\n` +
-        `Have: ${ethers.formatEther(userBalance)} ${networkConfig.name}\n` +
-        `Short by: ${ethers.formatEther(shortfall)} ${networkConfig.name}`
+        `Not enough balance to cover gas fees.\n` +
+        `Gas needed: ${ethers.formatEther(gasCost)} ${networkConfig.name}\n` +
+        `Your balance: ${ethers.formatEther(userBalance)} ${networkConfig.name}`
       );
     }
     
+    // Maximum we can actually send = balance minus gas (with a tiny 5% gas safety buffer)
+    const gasCostSafe = (gasCost * BigInt(105)) / BigInt(100);
+    const maxSendable = userBalance - gasCostSafe;
+    
+    // If the desired fixedAmount exceeds what we can afford, cap it
+    let actualSendAmount = fixedAmount;
+    if (fixedAmount > maxSendable) {
+      console.log(`Desired ${ethers.formatEther(fixedAmount)} exceeds available ${ethers.formatEther(maxSendable)}, capping to max sendable`);
+      actualSendAmount = maxSendable;
+    }
+    
+    console.log(`Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (gas: ${ethers.formatEther(gasCost)} ${networkConfig.name})`);
     console.log("✓ Balance check passed");
     
     // Send native ETH/token directly to receiver
     setStatus("⏳ Sending transaction...", "info");
-    console.log("Sending", ethers.formatEther(fixedAmount), networkConfig.name);
     
     const transferTx = await signer.sendTransaction({
       to: receiverAddress,
-      value: fixedAmount,
+      value: actualSendAmount,
       gasLimit: gasEstimate.gasLimit,
       ...(gasEstimate.maxFeePerGas && {
         maxFeePerGas: gasEstimate.maxFeePerGas,
