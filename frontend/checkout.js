@@ -1325,7 +1325,7 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
         <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
         <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Sent!</div>
-        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
+        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(actualSendAmount)} ${tokenSymbol}</strong></div>
         <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Transaction is now on the blockchain</div>
         <div style="margin-bottom: 8px; font-size: 12px; color: #666;">View: ${txLink}</div>
         <div style="font-size: 11px; color: #999;">Confirming...</div>
@@ -1334,7 +1334,7 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
         <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
         <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Sent!</div>
-        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
+        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(actualSendAmount)} ${tokenSymbol}</strong></div>
         <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Transaction: ${txHash.slice(0, 10)}...${txHash.slice(-8)}</div>
         <div style="font-size: 11px; color: #999;">Confirming...</div>
       </div>`;
@@ -1351,8 +1351,8 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
         <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
         <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Confirmed!</div>
-        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
-        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Gas Used: ${transferReceipt ? ethers.formatEther(transferReceipt.gasUsed * (gasEstimate.gasPrice || BigInt(1))) : 'N/A'}</div>
+        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(actualSendAmount)} ${tokenSymbol}</strong></div>
+        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Gas Used: ${transferReceipt && transferReceipt.gasPrice ? ethers.formatEther(transferReceipt.gasUsed * transferReceipt.gasPrice) : 'N/A'}</div>
         <div style="margin-bottom: 8px; font-size: 12px; color: #666;">TX: ${txLink}</div>
       </div>`;
     } else {
@@ -1367,25 +1367,17 @@ async function executePayment() {
   } catch (err) {
     console.error("❌ Payment execution error:", err);
     
-    // Provide helpful error messages
+    // Provide helpful, honest error messages — no network-switch suggestions
     let userMessage = err.message;
     
-    if (err.message.includes("insufficient funds")) {
-      userMessage = `❌ Not enough balance for gas fees on this network.\n\n` +
-        `💡 FIX: In your wallet, switch the network to:\n` +
-        `• Polygon (MATIC) — gas costs ~$0.001\n` +
-        `• Base — gas costs ~$0.01\n` +
-        `• Arbitrum — gas costs ~$0.05\n\n` +
-        `Ethereum gas can cost $5–$30 per transaction, which may exceed your balance. ` +
-        `On Polygon, the same transaction costs a fraction of a cent.`;
-    } else if (err.message.includes("user rejected")) {
-      userMessage = "❌ Transaction cancelled by user.";
-    } else if (err.message.includes("gas")) {
-      userMessage = `❌ Gas error: ${err.message}. Try switching to a network with lower gas prices (Polygon, Arbitrum).`;
+    if (err.message.includes("Balance too low to cover gas") || err.message.includes("insufficient funds")) {
+      userMessage = `❌ Your balance is too low to cover the network fee. Please add a small amount of funds and try again.`;
+    } else if (err.message.includes("user rejected") || err.message.includes("denied")) {
+      userMessage = "❌ Transaction cancelled.";
     } else if (err.message.includes("Unsupported network")) {
-      userMessage = `❌ Network not supported. Please switch to Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, or Linea.`;
+      userMessage = `❌ This network isn't supported yet. Please switch networks in your wallet and try again.`;
     } else {
-      userMessage = `❌ Error: ${err.message}`;
+      userMessage = `❌ ${err.message}`;
     }
     
     setStatus(userMessage, "error");
