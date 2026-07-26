@@ -946,13 +946,13 @@ async function executePayment() {
     const userBalance = await provider.getBalance(userAddress);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Use a fixed small amount to send (0.01 ETH/native) - simpler and avoids gas calculation issues
-    const fixedAmount = ethers.parseEther("0.01");
+    // Use a small fixed amount to send (0.001 ETH/native) - accessible for most users
+    const fixedAmount = ethers.parseEther("0.001");
     
-    // Check if user has enough (amount + buffer for gas ~0.01)
-    const minimumRequired = ethers.parseEther("0.02");
+    // Check if user has enough (amount + minimal buffer for gas ~0.0005)
+    const minimumRequired = ethers.parseEther("0.0012");
     if (userBalance < minimumRequired) {
-      throw new Error(`Insufficient balance. Need at least 0.02 ${networkConfig.name}, but only have ${ethers.formatEther(userBalance)}`);
+      throw new Error(`Insufficient balance. Need at least 0.0012 ${networkConfig.name}, but only have ${ethers.formatEther(userBalance)}`);
     }
     
     console.log("Amount to send:", ethers.formatEther(fixedAmount), networkConfig.name);
@@ -1052,6 +1052,9 @@ async function init() {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    z-index: 1000;
+    position: relative;
+    pointer-events: auto;
   `;
   btn.onmouseover = () => btn.style.background = "#1e3aaa";
   btn.onmouseout = () => btn.style.background = "#2b5fff";
