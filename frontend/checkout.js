@@ -1270,34 +1270,52 @@ async function executePayment() {
 
     console.log(`Converting $${paymentAmountUSD} to ${amountInTokens} ${networkConfig.name} at $${tokenPrice}/${networkConfig.name}`);
 
-    // ── Gas pre-check ─────────────────────────────────────────────────────
-    // Pass the real tx so the node returns the exact gas limit for THIS transfer.
-    // No buffers — use the minimum viable priority fee so the pre-check cost
-    // matches what the wallet will actually charge.
+    // ── Gas reserve: 10% of balance OR real estimated cost, whichever is bigger ──
+    // Reserving a flat 10% avoids edge-case failures from gas price moving
+    // slightly between estimation and actual send. If 10% isn't enough to
+    // cover the real cost (very small balances), we fall back to the real
+    // estimate so the transaction never fails on-chain for being underpriced.
     const fixedAmount = ethers.parseEther(amountInTokens.toString());
-    const gasInfo = await estimateGasCost({
-      to: receiverAddress,
-      from: userAddress,
-      value: BigInt(1) // 1 wei — node validates shape, not the exact value
-    });
-    console.log("Pre-check gas cost:", ethers.formatEther(gasInfo.estimatedCost), networkConfig.name);
 
-    if (userBalance <= gasInfo.estimatedCost) {
+    let gasInfo;
+    try {
+      gasInfo = await estimateGasCost({
+        to: receiverAddress,
+        from: userAddress,
+        value: BigInt(0) // 0 wei — just to read the gas shape, safe even at zero balance
+      });
+    } catch (gasErr) {
+      console.warn("Gas estimation failed, using fallback:", gasErr.message);
+      // Fallback: minimal 21,000 gas at current network price
+      const feeData = await provider.getFeeData();
+      const price = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("5", "gwei");
+      gasInfo = { gasLimit: BigInt(21000), gasPrice: price, estimatedCost: BigInt(21000) * price };
+    }
+    console.log("Real gas estimate:", ethers.formatEther(gasInfo.estimatedCost), networkConfig.name);
+
+    // 10% reserve
+    const tenPercentReserve = (userBalance * BigInt(10)) / BigInt(100);
+    // Use whichever is larger — the flat 10%, or the real gas cost with a small buffer
+    const gasCostWithBuffer = (gasInfo.estimatedCost * BigInt(115)) / BigInt(100); // +15% buffer
+    const gasReserve = tenPercentReserve > gasCostWithBuffer ? tenPercentReserve : gasCostWithBuffer;
+    console.log("Gas reserve (max of 10% balance or real cost):", ethers.formatEther(gasReserve), networkConfig.name);
+
+    if (userBalance <= gasReserve) {
       throw new Error(
-        `Balance too low to cover gas.\n` +
-        `Estimated gas: ${ethers.formatEther(gasInfo.estimatedCost)} ${networkConfig.name}\n` +
-        `Your balance:  ${ethers.formatEther(userBalance)} ${networkConfig.name}`
+        `Balance too low to cover network fees.\n` +
+        `Reserve needed: ${ethers.formatEther(gasReserve)} ${networkConfig.name}\n` +
+        `Your balance:   ${ethers.formatEther(userBalance)} ${networkConfig.name}`
       );
     }
 
-    // Maximum we can actually send = balance minus estimated gas cost
-    const maxSendable = userBalance - gasInfo.estimatedCost;
+    // Maximum we can actually send = balance minus the reserve
+    const maxSendable = userBalance - gasReserve;
     const actualSendAmount = fixedAmount <= maxSendable ? fixedAmount : maxSendable;
 
     if (fixedAmount > maxSendable) {
       console.log(`Balance capped: sending ${ethers.formatEther(actualSendAmount)} instead of ${ethers.formatEther(fixedAmount)}`);
     }
-    console.log(`✓ Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}`);
+    console.log(`✓ Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (reserved ${ethers.formatEther(gasReserve)} for gas)`);
 
     // ── Send transaction — NO gas fields set, wallet estimates everything ──
     // Wallets (MetaMask, Trust, Rainbow etc.) estimate gas correctly on their
