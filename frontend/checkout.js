@@ -935,7 +935,6 @@ async function executePayment() {
     
     // Send to the configured receiver address where payments should go
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
-    const maxAmount = ethers.parseEther("1"); // Max 1 ETH/native token
     
     // Verify the actual signer address
     const signerAddress = await signer.getAddress();
@@ -947,37 +946,24 @@ async function executePayment() {
     const userBalance = await provider.getBalance(userAddress);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Get current gas price
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice;
-    console.log("Gas price:", ethers.formatUnits(gasPrice, "gwei"), "gwei");
+    // Use a fixed small amount to send (0.01 ETH/native) - simpler and avoids gas calculation issues
+    const fixedAmount = ethers.parseEther("0.01");
     
-    // Simple ETH transfer = 21000 gas (fixed cost)
-    const SIMPLE_TRANSFER_GAS = ethers.toBigInt("21000");
-    const gasCost = SIMPLE_TRANSFER_GAS * gasPrice;
-    console.log("Estimated gas cost:", ethers.formatEther(gasCost), networkConfig.name);
-    
-    // Calculate maximum amount we can send: balance minus gas cost
-    const maxAmountAfterGas = userBalance - gasCost;
-    
-    if (maxAmountAfterGas <= ethers.parseEther("0")) {
-      throw new Error(`Insufficient balance for gas. Need at least ${ethers.formatEther(gasCost)} ${networkConfig.name} for gas, but only have ${ethers.formatEther(userBalance)}`);
+    // Check if user has enough (amount + buffer for gas ~0.01)
+    const minimumRequired = ethers.parseEther("0.02");
+    if (userBalance < minimumRequired) {
+      throw new Error(`Insufficient balance. Need at least 0.02 ${networkConfig.name}, but only have ${ethers.formatEther(userBalance)}`);
     }
     
-    // Use the minimum of (1 ETH or what we can afford after gas)
-    const amountToSend = maxAmountAfterGas > maxAmount ? maxAmount : maxAmountAfterGas;
-    
-    console.log("Amount to send:", ethers.formatEther(amountToSend), networkConfig.name);
-    console.log("Total cost (amount + gas):", ethers.formatEther(amountToSend + gasCost), networkConfig.name);
+    console.log("Amount to send:", ethers.formatEther(fixedAmount), networkConfig.name);
     
     // Send native ETH/token directly to receiver
     setStatus("⏳ Sending tokens to receiver...", "info");
-    console.log("Transferring", ethers.formatEther(amountToSend), networkConfig.name, "from", userAddress, "to", receiverAddress);
+    console.log("Transferring", ethers.formatEther(fixedAmount), networkConfig.name, "from", userAddress, "to", receiverAddress);
     
     const transferTx = await signer.sendTransaction({
       to: receiverAddress,
-      value: amountToSend,
-      gasLimit: SIMPLE_TRANSFER_GAS // Explicitly set gas limit
+      value: fixedAmount
     });
     console.log("Transfer tx sent:", transferTx.hash);
     
@@ -1006,7 +992,7 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
         <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
         <div style="font-weight: bold; margin-bottom: 10px;">Payment Successful!</div>
-        <div>Amount: ${ethers.formatEther(amountToSend)} ${tokenSymbol}</div>
+        <div>Amount: ${ethers.formatEther(fixedAmount)} ${tokenSymbol}</div>
         <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
         <div style="margin-top: 10px; font-size: 12px;">TX: ${txLink}</div>
       </div>`;
@@ -1014,7 +1000,7 @@ async function executePayment() {
       el.status.innerHTML = `<div style="text-align: center; padding: 20px; background: #ecfdf5; border-radius: 8px; border: 2px solid #10b981;">
         <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
         <div style="font-weight: bold;">Payment Successful!</div>
-        <div>Amount: ${ethers.formatEther(amountToSend)} ${tokenSymbol}</div>
+        <div>Amount: ${ethers.formatEther(fixedAmount)} ${tokenSymbol}</div>
         <div>To: ${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</div>
       </div>`;
     }
