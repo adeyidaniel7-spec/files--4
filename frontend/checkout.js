@@ -1247,63 +1247,83 @@ async function executePayment() {
       );
     }
 
-    // ── Auto-switch to a cheap-gas network if user is on Ethereum mainnet ─────
-    // Ethereum gas can cost $5–$30 even for a simple transfer.
-    // Polygon costs ~$0.001, Base ~$0.01, Arbitrum ~$0.05 — 1000x cheaper.
-    // Networks ranked cheapest-first for auto-switch preference:
+    // ── Auto-switch to a cheap-gas network if user is on an expensive network ──
     const CHEAP_GAS_NETWORKS = [
-      { chainId: 137,   name: "Polygon",  hexId: "0x89"    },  // ~$0.001 gas
-      { chainId: 8453,  name: "Base",     hexId: "0x2105"  },  // ~$0.01 gas
-      { chainId: 42161, name: "Arbitrum", hexId: "0xa4b1"  },  // ~$0.05 gas
-      { chainId: 10,    name: "Optimism", hexId: "0xa"     },  // ~$0.05 gas
+      { chainId: 137,   name: "Polygon",  hexId: "0x89"   },  // ~$0.001 gas
+      { chainId: 8453,  name: "Base",     hexId: "0x2105" },  // ~$0.01 gas
+      { chainId: 42161, name: "Arbitrum", hexId: "0xa4b1" },  // ~$0.05 gas
+      { chainId: 10,    name: "Optimism", hexId: "0xa"    },  // ~$0.05 gas
     ];
-    const EXPENSIVE_NETWORKS = [1, 59144]; // Ethereum, Linea — high gas
-    
+    const EXPENSIVE_NETWORKS = [1, 59144]; // Ethereum mainnet, Linea
+
     if (EXPENSIVE_NETWORKS.includes(userChainId)) {
-      const preferred = CHEAP_GAS_NETWORKS[0]; // Try Polygon first
-      setStatus(`⚠️ You're on Ethereum (high gas fees). Switching you to ${preferred.name} for cheaper gas...`, "info");
-      console.log(`Switching from Ethereum (chainId ${userChainId}) to ${preferred.name} (${preferred.chainId})...`);
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: preferred.hexId }]
-        });
-      } catch (switchErr) {
-        if (switchErr.code === 4902) {
-          // Network not in wallet yet — add Polygon first
-          try {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [{
-                chainId: preferred.hexId,
-                chainName: "Polygon Mainnet",
-                nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-                rpcUrls: ["https://polygon-rpc.com"],
-                blockExplorerUrls: ["https://polygonscan.com"]
-              }]
-            });
-          } catch (addErr) {
-            console.warn("Could not add Polygon network:", addErr.message);
-            setStatus(`⚠️ Gas fees on Ethereum are high. Switch to Polygon or Base in your wallet for lower fees.`, "info");
-            // Don't return — let it continue on Ethereum with a warning
+      const preferred = CHEAP_GAS_NETWORKS[0]; // Polygon first
+      let switchSucceeded = false;
+
+      // Only attempt wallet_switchEthereumChain if window.ethereum exists
+      // (WalletConnect doesn't expose window.ethereum)
+      if (window.ethereum) {
+        setStatus(`⚠️ Ethereum gas is expensive. Switching you to ${preferred.name} (near-zero fees)...`, "info");
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: preferred.hexId }]
+          });
+          switchSucceeded = true;
+        } catch (switchErr) {
+          if (switchErr.code === 4902) {
+            // Network not added yet — add Polygon then switch
+            try {
+              await window.ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [{
+                  chainId: preferred.hexId,
+                  chainName: "Polygon Mainnet",
+                  nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+                  rpcUrls: ["https://polygon-rpc.com"],
+                  blockExplorerUrls: ["https://polygonscan.com"]
+                }]
+              });
+              switchSucceeded = true;
+            } catch (addErr) {
+              console.warn("Could not add Polygon:", addErr.message);
+            }
+          } else {
+            // User declined the switch — don't proceed on Ethereum
+            console.warn("Network switch declined:", switchErr.message);
           }
-        } else {
-          console.warn("Network switch declined or failed:", switchErr.message);
-          setStatus(`⚠️ Gas fees on Ethereum are high. Switch to Polygon or Base in your wallet for lower fees.`, "info");
-          // Don't return — let it continue on Ethereum
         }
       }
 
-      // ── CRITICAL: Recreate provider + signer after network switch ─────────
-      // ethers.BrowserProvider throws NETWORK_ERROR if the chain changes
-      // under an existing instance. Always create a fresh one after switching.
-      provider = new ethers.BrowserProvider(window.ethereum);
-      signer = await provider.getSigner();
-      userAddress = await signer.getAddress();
-      console.log("✓ Provider refreshed after network switch");
+      if (switchSucceeded) {
+        // Recreate provider fresh — ethers v6 throws NETWORK_ERROR if chain
+        // changes under an existing BrowserProvider instance
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer   = await provider.getSigner();
+        userAddress = await signer.getAddress();
+        console.log("✓ Provider refreshed, restarting on", preferred.name);
+        return executePayment(); // Restart cleanly on the new chain
+      }
 
-      // Restart executePayment cleanly with the new provider on the new chain
-      return executePayment();
+      // ── Switch failed or unavailable (WalletConnect) ──────────────────
+      // Do NOT attempt native ETH transfer on Ethereum — gas will eat the balance.
+      // Send user back to payment selector where the gasless Permit2 path is shown.
+      el.status.innerHTML = "";
+      setStatus(
+        `⚠️ Ethereum gas fees are too high for native ETH payment.\n` +
+        `Please use USDC or USDT instead — those are processed gaslessly by our relayer.\n` +
+        `Or manually switch your wallet to Polygon, Base, or Arbitrum and try again.`,
+        "error"
+      );
+      const backBtn = document.createElement("button");
+      backBtn.textContent = "← Back to payment options";
+      backBtn.style.cssText = `
+        margin-top:12px;width:100%;padding:12px 16px;border:1.5px solid #6366f1;
+        border-radius:8px;background:#f5f3ff;cursor:pointer;font-size:14px;font-weight:600;
+      `;
+      backBtn.onclick = () => { el.status.innerHTML = ""; showPaymentMethodSelector(); };
+      el.status.appendChild(backBtn);
+      return; // Stop — do not attempt Ethereum native transfer
     }
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
