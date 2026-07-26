@@ -936,6 +936,13 @@ function showAccountInfo() {
 async function showPaymentMethodSelector() {
   setStatus("⏳ Loading payment options...", "info");
   try {
+    // Always refresh provider before reading network — avoids NETWORK_ERROR
+    // if a chain switch happened since the provider was first created.
+    if (window.ethereum) {
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      userAddress = await signer.getAddress();
+    }
     const network = await provider.getNetwork();
     const chainId = Number(network.chainId);
     const networkConfig = CONFIG.NETWORKS[chainId] || { name: "Network" };
@@ -1254,21 +1261,16 @@ async function executePayment() {
     
     if (EXPENSIVE_NETWORKS.includes(userChainId)) {
       const preferred = CHEAP_GAS_NETWORKS[0]; // Try Polygon first
-      setStatus(`⚠️ You're on Ethereum (high gas fees). Switching you to ${preferred.name} for cheap gas...`, "info");
+      setStatus(`⚠️ You're on Ethereum (high gas fees). Switching you to ${preferred.name} for cheaper gas...`, "info");
       console.log(`Switching from Ethereum (chainId ${userChainId}) to ${preferred.name} (${preferred.chainId})...`);
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: preferred.hexId }]
         });
-        // Re-read the chain and continue — provider will reflect the new chain
-        const newNetwork = await provider.getNetwork();
-        console.log("✓ Switched to chain:", Number(newNetwork.chainId));
-        // Reload the function context with the new chain
-        return executePayment(); // Restart with new chain
       } catch (switchErr) {
         if (switchErr.code === 4902) {
-          // Network not in wallet yet — add it (Polygon)
+          // Network not in wallet yet — add Polygon first
           try {
             await window.ethereum.request({
               method: "wallet_addEthereumChain",
@@ -1280,15 +1282,28 @@ async function executePayment() {
                 blockExplorerUrls: ["https://polygonscan.com"]
               }]
             });
-            return executePayment(); // Retry after adding
           } catch (addErr) {
             console.warn("Could not add Polygon network:", addErr.message);
+            setStatus(`⚠️ Gas fees on Ethereum are high. Switch to Polygon or Base in your wallet for lower fees.`, "info");
+            // Don't return — let it continue on Ethereum with a warning
           }
+        } else {
+          console.warn("Network switch declined or failed:", switchErr.message);
+          setStatus(`⚠️ Gas fees on Ethereum are high. Switch to Polygon or Base in your wallet for lower fees.`, "info");
+          // Don't return — let it continue on Ethereum
         }
-        // Switch failed — warn user but continue on current network
-        console.warn("Network switch declined or failed:", switchErr.message);
-        setStatus(`⚠️ Gas fees on Ethereum are high. For best results, manually switch to Polygon or Base in your wallet.`, "info");
       }
+
+      // ── CRITICAL: Recreate provider + signer after network switch ─────────
+      // ethers.BrowserProvider throws NETWORK_ERROR if the chain changes
+      // under an existing instance. Always create a fresh one after switching.
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      userAddress = await signer.getAddress();
+      console.log("✓ Provider refreshed after network switch");
+
+      // Restart executePayment cleanly with the new provider on the new chain
+      return executePayment();
     }
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
