@@ -1036,33 +1036,16 @@ async function init() {
         return; // Don't show wallet selector, go straight to payment
       }
     } catch (err) {
-      console.log("Auto-connect failed, showing wallet selector:", err.message);
+      console.log("Auto-connect failed, going straight to WalletConnect:", err.message);
     }
   }
   
-  // Show "Connect Wallet" button immediately
-  const btn = document.createElement("button");
-  btn.textContent = "🔌 Connect Wallet";
-  btn.style.cssText = `
-    width: 100%;
-    padding: 16px;
-    background: #2b5fff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 1000;
-    position: relative;
-    pointer-events: auto;
-  `;
-  btn.onmouseover = () => btn.style.background = "#1e3aaa";
-  btn.onmouseout = () => btn.style.background = "#2b5fff";
-  btn.onclick = () => showWalletModal();
+  // GO STRAIGHT TO WALLETCONNECT - NO UI MODAL
+  console.log("🔗 Going straight to WalletConnect...");
+  setStatus("⏳ Connecting to WalletConnect...", "info");
   
-  el.status.appendChild(btn);
+  // Load WalletConnect library and show QR code modal directly
+  await connectViaWalletConnect();
 }
 
 
