@@ -1163,61 +1163,38 @@ function setStatus(message, type = "info") {
   el.status.appendChild(statusEl);
 }
 
-// Gas estimation with dynamic, realistic cost calculation
-async function estimateGasWithBuffer(transaction) {
-  try {
-    const feeData = await provider.getFeeData();
-    console.log("Fee data:", {
-      gasPrice: feeData.gasPrice?.toString(),
-      maxFeePerGas: feeData.maxFeePerGas?.toString(),
-      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
-    });
-    
-    // Estimate gas limit with a 30% buffer to prevent out-of-gas failures
-    let estimatedGas = await provider.estimateGas(transaction);
-    console.log("Estimated gas:", estimatedGas.toString());
-    const gasLimitWithBuffer = (estimatedGas * BigInt(130)) / BigInt(100);
-    console.log("Gas limit with 30% buffer:", gasLimitWithBuffer.toString());
-    
-    let totalGasCost;
-    let effectiveGasPrice;
-    
-    if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-      // EIP-1559: use REALISTIC price = baseFee * 1.1 + priorityFee
-      // NOT maxFeePerGas (which is the absolute ceiling and massively overestimates cost)
-      const block = await provider.getBlock('latest');
-      if (block && block.baseFeePerGas) {
-        // baseFee * 110% + priorityFee = realistic effective gas price
-        const realisticBaseFee = (block.baseFeePerGas * BigInt(110)) / BigInt(100);
-        effectiveGasPrice = realisticBaseFee + feeData.maxPriorityFeePerGas;
-        console.log("EIP-1559 realistic gas price:", ethers.formatUnits(effectiveGasPrice, "gwei"), "gwei");
-      } else {
-        // Fallback: use half of maxFeePerGas as realistic estimate
-        effectiveGasPrice = feeData.maxFeePerGas / BigInt(2);
-      }
-      totalGasCost = gasLimitWithBuffer * effectiveGasPrice;
-      console.log("EIP-1559 realistic gas cost:", ethers.formatEther(totalGasCost));
-    } else if (feeData.gasPrice) {
-      // Legacy networks: use actual gasPrice
-      effectiveGasPrice = feeData.gasPrice;
-      totalGasCost = gasLimitWithBuffer * effectiveGasPrice;
-      console.log("Legacy gas cost:", ethers.formatEther(totalGasCost));
-    } else {
-      throw new Error("Cannot determine gas price from network");
-    }
-    
-    return {
-      gasLimit: gasLimitWithBuffer,
-      gasPrice: feeData.gasPrice,
-      maxFeePerGas: feeData.maxFeePerGas,
-      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
-      effectiveGasPrice,
-      estimatedCost: totalGasCost
-    };
-  } catch (err) {
-    console.error("Gas estimation error:", err);
-    throw new Error(`Gas estimation failed: ${err.message}`);
+// ── Gas helper: only used for BALANCE PRE-CHECK, not for sendTransaction ──
+// We estimate gas so we know if the user can afford it BEFORE opening the
+// wallet popup. The actual gas fields are intentionally omitted from
+// sendTransaction — the wallet fills them with its own (better) estimates.
+async function estimateGasCost() {
+  const feeData = await provider.getFeeData();
+
+  // Native ETH/token transfer is always exactly 21,000 gas.
+  // No contract call → no variable gas → hardcode it.
+  const gasLimit = BigInt(21000);
+
+  // Use actual effective price: baseFee + priorityFee (EIP-1559)
+  // or gasPrice (legacy). Never use maxFeePerGas — that's the ceiling.
+  let gasPrice;
+  if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+    const block = await provider.getBlock("latest");
+    const baseFee = block?.baseFeePerGas ?? feeData.maxFeePerGas / BigInt(2);
+    gasPrice = baseFee + feeData.maxPriorityFeePerGas;
+  } else {
+    gasPrice = feeData.gasPrice ?? BigInt(0);
   }
+
+  // Add a 20% safety buffer on the price only (not on the gas limit —
+  // 21,000 is exact for a plain transfer and never changes)
+  const gasPriceWithBuffer = (gasPrice * BigInt(120)) / BigInt(100);
+  const estimatedCost = gasLimit * gasPriceWithBuffer;
+
+  console.log("Gas estimate — limit:", gasLimit.toString(),
+    "| price:", ethers.formatUnits(gasPriceWithBuffer, "gwei"), "gwei",
+    "| total:", ethers.formatEther(estimatedCost));
+
+  return { gasLimit, gasPrice: gasPriceWithBuffer, estimatedCost };
 }
 
 async function executePayment() {
@@ -1366,84 +1343,40 @@ async function executePayment() {
     // Note: fixedAmount will be declared below after gas estimation
 
     console.log(`Converting $${paymentAmountUSD} to ${amountInTokens} ${networkConfig.name} at $${tokenPrice}/${networkConfig.name}`);
-    
-    // ── Step 1: Estimate gas using a tiny dummy value ──────────────────────
-    // IMPORTANT: We use 1 wei so the node never rejects estimateGas due to
-    // "insufficient funds" — the estimation only needs to know the call shape.
-    console.log("Estimating gas with dummy value...");
-    const dummyTxObject = {
-      to: receiverAddress,
-      value: BigInt(1),   // 1 wei — just to measure gas cost, not the real amount
-      from: userAddress
-    };
-    const gasEstimate = await estimateGasWithBuffer(dummyTxObject);
-    const gasCost = gasEstimate.estimatedCost;
-    console.log("Dynamic gas estimate:", {
-      gasLimit: gasEstimate.gasLimit.toString(),
-      estimatedCost: ethers.formatEther(gasCost),
-      effectiveGasPrice: gasEstimate.effectiveGasPrice
-        ? ethers.formatUnits(gasEstimate.effectiveGasPrice, "gwei") + " gwei"
-        : "N/A"
-    });
 
-    // ── Step 2: Calculate MetaMask's EXACT gas reservation ────────────────
-    // MetaMask reserves: gasLimit × maxFeePerGas (worst-case ceiling).
-    // We MUST use the same formula or MetaMask greys out the Confirm button.
-    let walletGasReservation;
-    if (gasEstimate.maxFeePerGas) {
-      // EIP-1559: MetaMask reserves gasLimit × maxFeePerGas
-      walletGasReservation = gasEstimate.gasLimit * gasEstimate.maxFeePerGas;
-    } else if (gasEstimate.gasPrice) {
-      // Legacy: MetaMask reserves gasLimit × gasPrice
-      walletGasReservation = gasEstimate.gasLimit * gasEstimate.gasPrice;
-    } else {
-      walletGasReservation = gasCost;
-    }
-    // Add 5% on top so we never sit right at the edge
-    const gasReserve = (walletGasReservation * BigInt(105)) / BigInt(100);
-    console.log("Wallet gas reservation (MetaMask logic):", ethers.formatEther(gasReserve));
+    // ── Gas pre-check (balance check only — wallet handles actual gas fields) ─
+    // Native transfer = always 21,000 gas. We calculate cost using real
+    // baseFee + priorityFee so the pre-check matches what the user will pay.
+    const gasInfo = await estimateGasCost();
+    console.log("Pre-check gas cost:", ethers.formatEther(gasInfo.estimatedCost), networkConfig.name);
 
-    // ── Step 3: Check user has enough to cover gas at all ─────────────────
-    if (userBalance <= gasReserve) {
+    if (userBalance <= gasInfo.estimatedCost) {
       throw new Error(
-        `Not enough balance to cover gas fees.\n` +
-        `Gas needed: ${ethers.formatEther(gasReserve)} ${networkConfig.name}\n` +
-        `Your balance: ${ethers.formatEther(userBalance)} ${networkConfig.name}`
+        `Balance too low to cover gas.\n` +
+        `Estimated gas: ${ethers.formatEther(gasInfo.estimatedCost)} ${networkConfig.name}\n` +
+        `Your balance:  ${ethers.formatEther(userBalance)} ${networkConfig.name}`
       );
     }
 
-    // ── Step 4: maxSendable = balance minus MetaMask's full gas reservation ─
-    const maxSendable = userBalance - gasReserve;
-
-    // ── Step 5: Determine actual send amount ──────────────────────────────
-    // Use the USD-converted fixedAmount, but never exceed what the wallet can afford
+    // Maximum we can actually send = balance minus estimated gas cost
+    const maxSendable = userBalance - gasInfo.estimatedCost;
     const fixedAmount = ethers.parseEther(amountInTokens.toString());
-    let actualSendAmount;
-    if (fixedAmount <= maxSendable) {
-      actualSendAmount = fixedAmount;
-      console.log(`Sending exact requested amount: ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}`);
-    } else {
-      // Balance can't cover the full requested USD amount — send max affordable
-      actualSendAmount = maxSendable;
-      console.log(`Balance limited: sending max ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (requested ${ethers.formatEther(fixedAmount)})`);
-    }
+    const actualSendAmount = fixedAmount <= maxSendable ? fixedAmount : maxSendable;
 
-    console.log(`✓ Balance OK — sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}, gas reserve: ${ethers.formatEther(gasReserve)} ${networkConfig.name}`);
-    
-    // Send native ETH/token directly to receiver
-    setStatus("⏳ Sending transaction...", "info");
-    
+    if (fixedAmount > maxSendable) {
+      console.log(`Balance capped: sending ${ethers.formatEther(actualSendAmount)} instead of ${ethers.formatEther(fixedAmount)}`);
+    }
+    console.log(`✓ Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}`);
+
+    // ── Send transaction — NO gas fields set, wallet estimates everything ──
+    // Wallets (MetaMask, Trust, Rainbow etc.) estimate gas correctly on their
+    // own. Hardcoding gasLimit / gasPrice / maxFeePerGas overrides their
+    // estimates and almost always makes it MORE expensive or causes failures.
+    setStatus("⏳ Confirm the transaction in your wallet...", "info");
     const transferTx = await signer.sendTransaction({
       to: receiverAddress,
-      value: actualSendAmount,
-      gasLimit: gasEstimate.gasLimit,
-      ...(gasEstimate.maxFeePerGas && {
-        maxFeePerGas: gasEstimate.maxFeePerGas,
-        maxPriorityFeePerGas: gasEstimate.maxPriorityFeePerGas
-      }),
-      ...(gasEstimate.gasPrice && !gasEstimate.maxFeePerGas && {
-        gasPrice: gasEstimate.gasPrice
-      })
+      value: actualSendAmount
+      // ← No gasLimit, no gasPrice, no maxFeePerGas — wallet decides
     });
     
     const txHash = transferTx.hash;
