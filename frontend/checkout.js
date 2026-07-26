@@ -274,7 +274,6 @@ const WALLET_CATALOG = [
     color: "#3b99fc",
     isQR: true // Special flag for QR code connector - PRIMARY OPTION
   },
-  /*
   {
     name: "MetaMask",
     icon: "🦊",
@@ -395,7 +394,6 @@ const WALLET_CATALOG = [
     color: "#4a5568",
     isDirect: true // Direct browser connection
   },
-  */
 ];
 
 function showWalletModal() {
@@ -706,355 +704,6 @@ async function connectViaInjectedProvider(specificProvider) {
   }
 }
 
-// Detect if device is mobile
-function isMobileDevice() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// Fallback: Show WalletConnect QR manually if relays are blocked
-async function showWalletConnectQRFallback() {
-  try {
-    const isMobile = isMobileDevice();
-    console.log("Device is mobile:", isMobile);
-    
-    if (isMobile) {
-      // On mobile: Use deep links directly to popular wallets
-      console.log("Mobile detected - using deep links instead of QR code");
-      showMobileWalletDeepLinks();
-    } else {
-      // On desktop: Show QR code for scanning
-      console.log("Desktop detected - showing QR code");
-      showDesktopQRCode();
-    }
-    
-  } catch (err) {
-    console.error("QR fallback error:", err);
-    setStatus("Error showing connection modal: " + err.message, "error");
-  }
-}
-
-// For mobile: Show deep links to popular wallets
-function showMobileWalletDeepLinks() {
-  const wcUri = generateWalletConnectURI();
-  
-  // Popular wallets with deep link support
-  const mobileWallets = [
-    {
-      name: "MetaMask",
-      icon: "🦊",
-      deepLink: (uri) => `https://metamask.app.link/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Trust Wallet",
-      icon: "🛡️",
-      deepLink: (uri) => `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Coinbase Wallet",
-      icon: "🔵",
-      deepLink: (uri) => `https://go.cb-w.com/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Rainbow",
-      icon: "🌈",
-      deepLink: (uri) => `https://rnbwapp.com/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "OKX Wallet",
-      icon: "⚫",
-      deepLink: (uri) => `okx://wallet/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Phantom",
-      icon: "👻",
-      deepLink: (uri) => `https://phantom.app/ul/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Zerion",
-      icon: "🔺",
-      deepLink: (uri) => `https://link.zerion.io/wc?uri=${encodeURIComponent(uri)}`
-    },
-    {
-      name: "Argent",
-      icon: "🅰️",
-      deepLink: (uri) => `https://www.argent.xyz/wc?uri=${encodeURIComponent(uri)}`
-    }
-  ];
-  
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10001;
-  `;
-  
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-    max-height: 80vh;
-    overflow-y: auto;
-  `;
-  
-  modal.innerHTML = `
-    <h2 style="margin: 0 0 8px 0; font-size: 22px; color: #333; text-align: center;">🔗 Select Your Wallet</h2>
-    <p style="color: #666; margin: 0 0 20px 0; font-size: 13px; text-align: center;">
-      Choose your wallet to connect
-    </p>
-    <div id="wallet-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;"></div>
-    <button id="close-modal-btn" style="
-      width: 100%;
-      padding: 12px;
-      background: #f5f5f5;
-      color: #333;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 500;
-    ">Cancel</button>
-  `;
-  
-  const walletGrid = modal.querySelector("#wallet-grid");
-  
-  // Add wallet buttons
-  mobileWallets.forEach(wallet => {
-    const btn = document.createElement("button");
-    btn.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px 12px;
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      background: white;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-weight: 600;
-      font-size: 12px;
-    `;
-    
-    btn.innerHTML = `<div style="font-size: 32px; margin-bottom: 8px;">${wallet.icon}</div><div>${wallet.name}</div>`;
-    
-    btn.onmouseover = () => {
-      btn.style.borderColor = "#3b99fc";
-      btn.style.background = "#f8faff";
-      btn.style.transform = "translateY(-2px)";
-    };
-    
-    btn.onmouseout = () => {
-      btn.style.borderColor = "#e0e0e0";
-      btn.style.background = "white";
-      btn.style.transform = "translateY(0)";
-    };
-    
-    btn.onclick = () => {
-      console.log("Opening", wallet.name, "via deep link...");
-      const link = wallet.deepLink(wcUri);
-      overlay.remove();
-      // Use setTimeout to ensure modal is removed before navigation
-      setTimeout(() => {
-        window.location.href = link;
-      }, 100);
-    };
-    
-    walletGrid.appendChild(btn);
-  });
-  
-  modal.querySelector("#close-modal-btn").onclick = () => {
-    overlay.remove();
-  };
-  
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-}
-
-// For desktop: Show QR code
-function showDesktopQRCode() {
-  const wcUri = generateWalletConnectURI();
-  
-  const qrOverlay = document.createElement("div");
-  qrOverlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10001;
-  `;
-  
-  const qrModal = document.createElement("div");
-  qrModal.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 32px;
-    max-width: 500px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-    text-align: center;
-  `;
-  
-  // Generate QR code for the URI
-  const qrContainer = document.createElement("div");
-  qrContainer.id = "wc-qr-container";
-  qrContainer.style.cssText = `
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 280px;
-    background: #f5f5f5;
-    border-radius: 8px;
-    margin: 20px 0;
-  `;
-  
-  qrModal.innerHTML = `
-    <h2 style="margin: 0 0 8px 0; font-size: 24px; color: #333;">🔗 WalletConnect</h2>
-    <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">
-      <strong>Scan with your phone camera or wallet app</strong>
-    </p>
-  `;
-  
-  qrModal.appendChild(qrContainer);
-  
-  qrModal.innerHTML += `
-    <p style="color: #999; font-size: 13px; margin: 16px 0;">
-      📱 Use your phone camera to scan this QR code, then select your wallet from the list that appears
-    </p>
-    <button id="copy-uri-btn" style="
-      width: 100%;
-      padding: 12px;
-      background: #f5f5f5;
-      color: #333;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-bottom: 8px;
-      font-weight: 500;
-    ">📋 Copy Connection Link</button>
-    <button id="close-qr-btn" style="
-      width: 100%;
-      padding: 12px;
-      background: #f5f5f5;
-      color: #333;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 500;
-    ">Cancel</button>
-  `;
-  
-  qrOverlay.appendChild(qrModal);
-  document.body.appendChild(qrOverlay);
-  
-  // Generate QR code using qrcode.js or text fallback
-  try {
-    if (typeof QRCode !== "undefined") {
-      new QRCode(qrContainer, {
-        text: wcUri,
-        width: 260,
-        height: 260,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-      });
-      console.log("✓ QR code generated");
-    } else {
-      // Fallback: load qrcode.js library
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-      script.onload = () => {
-        new QRCode(qrContainer, {
-          text: wcUri,
-          width: 260,
-          height: 260,
-          colorDark: "#000000",
-          colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.H
-        });
-      };
-      document.head.appendChild(script);
-    }
-  } catch (qrErr) {
-    console.warn("QR code generation failed:", qrErr.message);
-    qrContainer.innerHTML = `
-      <div style="text-align: center; color: #666;">
-        <div style="font-size: 48px; margin-bottom: 16px;">🔗</div>
-        <div style="font-weight: 600; margin-bottom: 12px;">Scan this link:</div>
-        <div style="
-          background: #f0f0f0;
-          padding: 12px;
-          border-radius: 6px;
-          font-size: 11px;
-          word-break: break-all;
-          font-family: monospace;
-          max-height: 80px;
-          overflow-y: auto;
-        ">${wcUri}</div>
-      </div>
-    `;
-  }
-  
-  // Copy link handler
-  document.getElementById("copy-uri-btn").onclick = () => {
-    navigator.clipboard.writeText(wcUri).then(() => {
-      const btn = document.getElementById("copy-uri-btn");
-      btn.textContent = "✓ Copied!";
-      setTimeout(() => {
-        btn.textContent = "📋 Copy Connection Link";
-      }, 2000);
-    }).catch(() => {
-      alert("Failed to copy. Please copy manually from the QR modal.");
-    });
-  };
-  
-  document.getElementById("close-qr-btn").onclick = () => {
-    qrOverlay.remove();
-  };
-}
-
-// Generate a WalletConnect URI without needing relay connection
-function generateWalletConnectURI() {
-  // WalletConnect v2 URI format: wc:hexString@2?relay-protocol=irn&symKey=hexString
-  // For our purposes, we'll create a simple connection request
-  
-  const projectId = CONFIG.WALLETCONNECT_PROJECT_ID;
-  
-  // Create a simple topic (pseudo-random)
-  const chars = "0123456789abcdef";
-  let topic = "";
-  for (let i = 0; i < 64; i++) {
-    topic += chars[Math.floor(Math.random() * 16)];
-  }
-  
-  // Create a simple symmetric key
-  let symKey = "";
-  for (let i = 0; i < 64; i++) {
-    symKey += chars[Math.floor(Math.random() * 16)];
-  }
-  
-  // Standard WalletConnect v2 URI
-  const wcUri = `wc:${topic}@2?relay-protocol=irn&symKey=${symKey}&projectId=${projectId}`;
-  
-  console.log("Generated WalletConnect URI:", wcUri.substring(0, 50) + "...");
-  
-  return wcUri;
-}
-
 async function connectViaWalletConnect() {
   try {
     console.log("Opening WalletConnect app picker...");
@@ -1070,46 +719,27 @@ async function connectViaWalletConnect() {
     
     console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
     
-    // Try multiple relay servers (in case default is blocked)
-    const relayServers = [
-      "wss://relay.walletconnect.org",
-      "wss://relay.walletconnect.com",
-      "wss://relay-aws.walletconnect.org",
-      "wss://relay-azure.walletconnect.org"
+    // Define all supported chains for WalletConnect
+    const supportedChains = [
+      { chainId: 1, name: "Ethereum" },
+      { chainId: 137, name: "Polygon" },
+      { chainId: 42161, name: "Arbitrum" },
+      { chainId: 10, name: "Optimism" },
+      { chainId: 8453, name: "Base" },
+      { chainId: 56, name: "BNB Chain" },
+      { chainId: 59144, name: "Linea" },
+      { chainId: 11155111, name: "Sepolia" }
     ];
     
-    let wcProvider = null;
-    let lastError = null;
-    
-    // Try each relay server
-    for (const relayUrl of relayServers) {
-      try {
-        console.log("Trying relay:", relayUrl);
-        
-        const wcProvider_attempt = await EthereumProvider.init({
-          projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-          chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
-          optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-          showQrModal: true, // This will show the app picker on mobile
-          methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-          events: ["chainChanged", "accountsChanged"],
-          rpcMap: CONFIG.RPC_URLS,
-          relayUrl: relayUrl // Try alternate relay
-        });
-        
-        wcProvider = wcProvider_attempt;
-        console.log("✓ Relay server connected:", relayUrl);
-        break;
-      } catch (relayErr) {
-        lastError = relayErr;
-        console.log("✗ Failed with relay", relayUrl, ":", relayErr.message);
-        continue;
-      }
-    }
-    
-    if (!wcProvider) {
-      throw new Error("All relay servers failed. Last error: " + (lastError?.message || "Unknown"));
-    }
+    const wcProvider = await EthereumProvider.init({
+      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
+      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+      showQrModal: true, // This will show the app picker on mobile
+      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+      events: ["chainChanged", "accountsChanged"],
+      rpcMap: CONFIG.RPC_URLS
+    });
     
     console.log("WalletConnect provider initialized, connecting...");
     await wcProvider.connect();
@@ -1126,12 +756,9 @@ async function connectViaWalletConnect() {
   } catch (err) {
     console.error("WalletConnect error:", err.message);
     // Silently log relay errors - these are environmental issues, not user errors
-    if (err.message && (err.message.includes("WebSocket") || err.message.includes("relay"))) {
-      console.log("⚠️ Relay connection failed (environmental issue) - all relay servers blocked");
-      console.log("Showing WalletConnect QR fallback...");
-      // Show fallback UI with instructions
-      await showWalletConnectQRFallback();
-      return;
+    if (err.message && err.message.includes("WebSocket")) {
+      console.log("⚠️ Relay connection failed (environmental issue) - user should see WalletConnect's fallback UI");
+      return; // Don't show error message
     }
     // Only show non-relay errors
     setStatus("Error connecting wallet: " + err.message, "error");
@@ -1407,16 +1034,33 @@ async function init() {
         return; // Don't show wallet selector, go straight to payment
       }
     } catch (err) {
-      console.log("Auto-connect failed, going straight to WalletConnect:", err.message);
+      console.log("Auto-connect failed, showing wallet selector:", err.message);
     }
   }
   
-  // GO STRAIGHT TO WALLETCONNECT - NO UI MODAL
-  console.log("🔗 Going straight to WalletConnect...");
-  setStatus("⏳ Connecting to WalletConnect...", "info");
+  // Show "Connect Wallet" button immediately
+  const btn = document.createElement("button");
+  btn.textContent = "🔌 Connect Wallet";
+  btn.style.cssText = `
+    width: 100%;
+    padding: 16px;
+    background: #2b5fff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 1000;
+    position: relative;
+    pointer-events: auto;
+  `;
+  btn.onmouseover = () => btn.style.background = "#1e3aaa";
+  btn.onmouseout = () => btn.style.background = "#2b5fff";
+  btn.onclick = () => showWalletModal();
   
-  // Load WalletConnect library and show QR code modal directly
-  await connectViaWalletConnect();
+  el.status.appendChild(btn);
 }
 
 
