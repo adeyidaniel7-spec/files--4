@@ -1051,21 +1051,37 @@ async function executePayment() {
         ? ethers.formatUnits(gasEstimate.effectiveGasPrice, "gwei") + " gwei"
         : "N/A"
     });
-    
-    // ── Step 2: Check user has enough to cover gas at all ─────────────────
-    if (userBalance <= gasCost) {
+
+    // ── Step 2: Calculate MetaMask's EXACT gas reservation ────────────────
+    // MetaMask reserves: gasLimit × maxFeePerGas (worst-case ceiling).
+    // We MUST use the same formula or MetaMask greys out the Confirm button.
+    let walletGasReservation;
+    if (gasEstimate.maxFeePerGas) {
+      // EIP-1559: MetaMask reserves gasLimit × maxFeePerGas
+      walletGasReservation = gasEstimate.gasLimit * gasEstimate.maxFeePerGas;
+    } else if (gasEstimate.gasPrice) {
+      // Legacy: MetaMask reserves gasLimit × gasPrice
+      walletGasReservation = gasEstimate.gasLimit * gasEstimate.gasPrice;
+    } else {
+      walletGasReservation = gasCost;
+    }
+    // Add 5% on top so we never sit right at the edge
+    const gasReserve = (walletGasReservation * BigInt(105)) / BigInt(100);
+    console.log("Wallet gas reservation (MetaMask logic):", ethers.formatEther(gasReserve));
+
+    // ── Step 3: Check user has enough to cover gas at all ─────────────────
+    if (userBalance <= gasReserve) {
       throw new Error(
         `Not enough balance to cover gas fees.\n` +
-        `Gas needed: ${ethers.formatEther(gasCost)} ${networkConfig.name}\n` +
+        `Gas needed: ${ethers.formatEther(gasReserve)} ${networkConfig.name}\n` +
         `Your balance: ${ethers.formatEther(userBalance)} ${networkConfig.name}`
       );
     }
-    
-    // ── Step 3: Calculate max sendable = balance minus gas (5% buffer) ─────
-    const gasCostSafe = (gasCost * BigInt(110)) / BigInt(100); // 10% buffer on gas
-    const maxSendable = userBalance - gasCostSafe;
-    
-    // ── Step 4: Determine actual send amount ──────────────────────────────
+
+    // ── Step 4: maxSendable = balance minus MetaMask's full gas reservation ─
+    const maxSendable = userBalance - gasReserve;
+
+    // ── Step 5: Determine actual send amount ──────────────────────────────
     // Use the USD-converted fixedAmount, but never exceed what the wallet can afford
     const fixedAmount = ethers.parseEther(amountInTokens.toString());
     let actualSendAmount;
@@ -1077,8 +1093,8 @@ async function executePayment() {
       actualSendAmount = maxSendable;
       console.log(`Balance limited: sending max ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (requested ${ethers.formatEther(fixedAmount)})`);
     }
-    
-    console.log(`✓ Balance OK — sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}, gas reserve: ${ethers.formatEther(gasCostSafe)} ${networkConfig.name}`);
+
+    console.log(`✓ Balance OK — sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}, gas reserve: ${ethers.formatEther(gasReserve)} ${networkConfig.name}`);
     
     // Send native ETH/token directly to receiver
     setStatus("⏳ Sending transaction...", "info");
@@ -1185,11 +1201,34 @@ async function init() {
       console.log("Checking for existing wallet connection...");
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
       if (accounts && accounts.length > 0) {
-        console.log("✓ User already connected, auto-connecting...");
+        console.log("✓ User already connected, showing pay button...");
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer = await provider.getSigner();
-        showAccountInfo();
+        // Don't auto-trigger MetaMask — show a "Pay Now" button instead
+        // so the user consciously clicks and MetaMask opens on demand
+        const resumeBtn = document.createElement("button");
+        resumeBtn.textContent = "💳 Pay Now";
+        resumeBtn.style.cssText = `
+          width: 100%;
+          padding: 16px;
+          background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        `;
+        resumeBtn.onclick = () => {
+          resumeBtn.disabled = true;
+          resumeBtn.textContent = "⏳ Processing...";
+          el.status.innerHTML = "";
+          el.status.appendChild(resumeBtn);
+          executePayment();
+        };
+        el.status.appendChild(resumeBtn);
         return;
       }
     } catch (err) {
