@@ -274,6 +274,7 @@ const WALLET_CATALOG = [
     color: "#3b99fc",
     isQR: true // Special flag for QR code connector - PRIMARY OPTION
   },
+  /*
   {
     name: "MetaMask",
     icon: "🦊",
@@ -394,6 +395,7 @@ const WALLET_CATALOG = [
     color: "#4a5568",
     isDirect: true // Direct browser connection
   },
+  */
 ];
 
 function showWalletModal() {
