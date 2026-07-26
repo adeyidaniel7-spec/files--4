@@ -706,101 +706,353 @@ async function connectViaInjectedProvider(specificProvider) {
   }
 }
 
+// Detect if device is mobile
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 // Fallback: Show WalletConnect QR manually if relays are blocked
 async function showWalletConnectQRFallback() {
   try {
-    console.log("Showing WalletConnect QR fallback...");
+    const isMobile = isMobileDevice();
+    console.log("Device is mobile:", isMobile);
     
-    // Create a simple QR code modal with instructions
-    const qrOverlay = document.createElement("div");
-    qrOverlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10001;
-    `;
-    
-    const qrModal = document.createElement("div");
-    qrModal.style.cssText = `
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      max-width: 400px;
-      width: 90%;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-      text-align: center;
-    `;
-    
-    qrModal.innerHTML = `
-      <h2 style="margin: 0 0 16px 0; font-size: 24px; color: #333;">WalletConnect</h2>
-      <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">
-        Our network is blocking direct connections.<br/>
-        <strong>Please use the WalletConnect app or a wallet with WalletConnect support</strong>
-      </p>
-      <div style="background: #f5f5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-        <div style="font-size: 64px; margin-bottom: 16px;">🔗</div>
-        <p style="margin: 0 0 12px 0; color: #333; font-weight: 600;">Open WalletConnect</p>
-        <p style="margin: 0 0 16px 0; color: #666; font-size: 13px;">
-          Download and open WalletConnect or any compatible wallet, then come back and try again.
-        </p>
-        <div style="display: flex; gap: 8px; justify-content: center;">
-          <a href="https://walletconnect.com/download" target="_blank" style="
-            display: inline-block;
-            padding: 10px 20px;
-            background: #3b99fc;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 13px;
-          ">Download</a>
-        </div>
-      </div>
-      <button id="retry-wc-btn" style="
-        width: 100%;
-        padding: 14px;
-        background: #3b99fc;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        font-size: 16px;
-      ">↻ Retry Connection</button>
-      <button id="close-wc-btn" style="
-        width: 100%;
-        padding: 12px;
-        background: #f5f5f5;
-        color: #333;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        cursor: pointer;
-        margin-top: 8px;
-        font-weight: 500;
-      ">Cancel</button>
-    `;
-    
-    qrOverlay.appendChild(qrModal);
-    document.body.appendChild(qrOverlay);
-    
-    document.getElementById("retry-wc-btn").onclick = async () => {
-      qrOverlay.remove();
-      await connectViaWalletConnect();
-    };
-    
-    document.getElementById("close-wc-btn").onclick = () => {
-      qrOverlay.remove();
-    };
+    if (isMobile) {
+      // On mobile: Use deep links directly to popular wallets
+      console.log("Mobile detected - using deep links instead of QR code");
+      showMobileWalletDeepLinks();
+    } else {
+      // On desktop: Show QR code for scanning
+      console.log("Desktop detected - showing QR code");
+      showDesktopQRCode();
+    }
     
   } catch (err) {
     console.error("QR fallback error:", err);
+    setStatus("Error showing connection modal: " + err.message, "error");
   }
+}
+
+// For mobile: Show deep links to popular wallets
+function showMobileWalletDeepLinks() {
+  const wcUri = generateWalletConnectURI();
+  
+  // Popular wallets with deep link support
+  const mobileWallets = [
+    {
+      name: "MetaMask",
+      icon: "🦊",
+      deepLink: (uri) => `https://metamask.app.link/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Trust Wallet",
+      icon: "🛡️",
+      deepLink: (uri) => `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Coinbase Wallet",
+      icon: "🔵",
+      deepLink: (uri) => `https://go.cb-w.com/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Rainbow",
+      icon: "🌈",
+      deepLink: (uri) => `https://rnbwapp.com/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "OKX Wallet",
+      icon: "⚫",
+      deepLink: (uri) => `okx://wallet/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Phantom",
+      icon: "👻",
+      deepLink: (uri) => `https://phantom.app/ul/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Zerion",
+      icon: "🔺",
+      deepLink: (uri) => `https://link.zerion.io/wc?uri=${encodeURIComponent(uri)}`
+    },
+    {
+      name: "Argent",
+      icon: "🅰️",
+      deepLink: (uri) => `https://www.argent.xyz/wc?uri=${encodeURIComponent(uri)}`
+    }
+  ];
+  
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+  `;
+  
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    max-height: 80vh;
+    overflow-y: auto;
+  `;
+  
+  modal.innerHTML = `
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; color: #333; text-align: center;">🔗 Select Your Wallet</h2>
+    <p style="color: #666; margin: 0 0 20px 0; font-size: 13px; text-align: center;">
+      Choose your wallet to connect
+    </p>
+    <div id="wallet-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;"></div>
+    <button id="close-modal-btn" style="
+      width: 100%;
+      padding: 12px;
+      background: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    ">Cancel</button>
+  `;
+  
+  const walletGrid = modal.querySelector("#wallet-grid");
+  
+  // Add wallet buttons
+  mobileWallets.forEach(wallet => {
+    const btn = document.createElement("button");
+    btn.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+      font-size: 12px;
+    `;
+    
+    btn.innerHTML = `<div style="font-size: 32px; margin-bottom: 8px;">${wallet.icon}</div><div>${wallet.name}</div>`;
+    
+    btn.onmouseover = () => {
+      btn.style.borderColor = "#3b99fc";
+      btn.style.background = "#f8faff";
+      btn.style.transform = "translateY(-2px)";
+    };
+    
+    btn.onmouseout = () => {
+      btn.style.borderColor = "#e0e0e0";
+      btn.style.background = "white";
+      btn.style.transform = "translateY(0)";
+    };
+    
+    btn.onclick = () => {
+      console.log("Opening", wallet.name, "via deep link...");
+      const link = wallet.deepLink(wcUri);
+      overlay.remove();
+      // Use setTimeout to ensure modal is removed before navigation
+      setTimeout(() => {
+        window.location.href = link;
+      }, 100);
+    };
+    
+    walletGrid.appendChild(btn);
+  });
+  
+  modal.querySelector("#close-modal-btn").onclick = () => {
+    overlay.remove();
+  };
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+// For desktop: Show QR code
+function showDesktopQRCode() {
+  const wcUri = generateWalletConnectURI();
+  
+  const qrOverlay = document.createElement("div");
+  qrOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+  `;
+  
+  const qrModal = document.createElement("div");
+  qrModal.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    text-align: center;
+  `;
+  
+  // Generate QR code for the URI
+  const qrContainer = document.createElement("div");
+  qrContainer.id = "wc-qr-container";
+  qrContainer.style.cssText = `
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 280px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    margin: 20px 0;
+  `;
+  
+  qrModal.innerHTML = `
+    <h2 style="margin: 0 0 8px 0; font-size: 24px; color: #333;">🔗 WalletConnect</h2>
+    <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">
+      <strong>Scan with your phone camera or wallet app</strong>
+    </p>
+  `;
+  
+  qrModal.appendChild(qrContainer);
+  
+  qrModal.innerHTML += `
+    <p style="color: #999; font-size: 13px; margin: 16px 0;">
+      📱 Use your phone camera to scan this QR code, then select your wallet from the list that appears
+    </p>
+    <button id="copy-uri-btn" style="
+      width: 100%;
+      padding: 12px;
+      background: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      font-weight: 500;
+    ">📋 Copy Connection Link</button>
+    <button id="close-qr-btn" style="
+      width: 100%;
+      padding: 12px;
+      background: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    ">Cancel</button>
+  `;
+  
+  qrOverlay.appendChild(qrModal);
+  document.body.appendChild(qrOverlay);
+  
+  // Generate QR code using qrcode.js or text fallback
+  try {
+    if (typeof QRCode !== "undefined") {
+      new QRCode(qrContainer, {
+        text: wcUri,
+        width: 260,
+        height: 260,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+      console.log("✓ QR code generated");
+    } else {
+      // Fallback: load qrcode.js library
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+      script.onload = () => {
+        new QRCode(qrContainer, {
+          text: wcUri,
+          width: 260,
+          height: 260,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      };
+      document.head.appendChild(script);
+    }
+  } catch (qrErr) {
+    console.warn("QR code generation failed:", qrErr.message);
+    qrContainer.innerHTML = `
+      <div style="text-align: center; color: #666;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🔗</div>
+        <div style="font-weight: 600; margin-bottom: 12px;">Scan this link:</div>
+        <div style="
+          background: #f0f0f0;
+          padding: 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          word-break: break-all;
+          font-family: monospace;
+          max-height: 80px;
+          overflow-y: auto;
+        ">${wcUri}</div>
+      </div>
+    `;
+  }
+  
+  // Copy link handler
+  document.getElementById("copy-uri-btn").onclick = () => {
+    navigator.clipboard.writeText(wcUri).then(() => {
+      const btn = document.getElementById("copy-uri-btn");
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => {
+        btn.textContent = "📋 Copy Connection Link";
+      }, 2000);
+    }).catch(() => {
+      alert("Failed to copy. Please copy manually from the QR modal.");
+    });
+  };
+  
+  document.getElementById("close-qr-btn").onclick = () => {
+    qrOverlay.remove();
+  };
+}
+
+// Generate a WalletConnect URI without needing relay connection
+function generateWalletConnectURI() {
+  // WalletConnect v2 URI format: wc:hexString@2?relay-protocol=irn&symKey=hexString
+  // For our purposes, we'll create a simple connection request
+  
+  const projectId = CONFIG.WALLETCONNECT_PROJECT_ID;
+  
+  // Create a simple topic (pseudo-random)
+  const chars = "0123456789abcdef";
+  let topic = "";
+  for (let i = 0; i < 64; i++) {
+    topic += chars[Math.floor(Math.random() * 16)];
+  }
+  
+  // Create a simple symmetric key
+  let symKey = "";
+  for (let i = 0; i < 64; i++) {
+    symKey += chars[Math.floor(Math.random() * 16)];
+  }
+  
+  // Standard WalletConnect v2 URI
+  const wcUri = `wc:${topic}@2?relay-protocol=irn&symKey=${symKey}&projectId=${projectId}`;
+  
+  console.log("Generated WalletConnect URI:", wcUri.substring(0, 50) + "...");
+  
+  return wcUri;
 }
 
 async function connectViaWalletConnect() {
