@@ -973,10 +973,10 @@ async function executePayment() {
     const userBalance = await provider.getBalance(userAddress);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Fixed amount to send - 0.001 native tokens
-    const fixedAmount = ethers.parseEther("0.001");
+    // Fixed amount to send - 0.0001 native tokens (small, accessible amount)
+    const fixedAmount = ethers.parseEther("0.0001");
     
-    // Build the transaction object
+    // Build the transaction object with a small amount first to estimate gas
     const txObject = {
       to: receiverAddress,
       value: fixedAmount,
@@ -993,21 +993,22 @@ async function executePayment() {
     });
     
     // Calculate total amount needed (transfer amount + gas)
+    // Note: We use fixedAmount (0.0001) not the gas estimate as the transfer
     const totalRequired = fixedAmount + gasEstimate.estimatedCost;
     console.log("Total required (amount + gas):", ethers.formatEther(totalRequired), networkConfig.name);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Add 10% safety margin to account for gas price fluctuations
-    const minRequiredWithMargin = (totalRequired * BigInt(110)) / BigInt(100);
-    console.log("Minimum required (with 10% safety margin):", ethers.formatEther(minRequiredWithMargin));
+    // Add 5% safety margin (reduced from 10% for better accessibility)
+    const minRequiredWithMargin = (totalRequired * BigInt(105)) / BigInt(100);
+    console.log("Minimum required (with 5% safety margin):", ethers.formatEther(minRequiredWithMargin));
     
     if (userBalance < minRequiredWithMargin) {
       const shortfall = minRequiredWithMargin - userBalance;
       throw new Error(
         `Insufficient balance.\n` +
-        `Required: ${ethers.formatEther(minRequiredWithMargin)} ${networkConfig.name}\n` +
-        `Available: ${ethers.formatEther(userBalance)} ${networkConfig.name}\n` +
-        `Shortfall: ${ethers.formatEther(shortfall)} ${networkConfig.name}`
+        `Need: ${ethers.formatEther(minRequiredWithMargin)} ${networkConfig.name}\n` +
+        `Have: ${ethers.formatEther(userBalance)} ${networkConfig.name}\n` +
+        `Short by: ${ethers.formatEther(shortfall)} ${networkConfig.name}`
       );
     }
     
