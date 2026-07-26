@@ -1031,45 +1031,55 @@ async function executePayment() {
       })
     });
     
-    console.log("✓ Transaction sent:", transferTx.hash);
-    setStatus("⏳ Waiting for confirmation (this may take a minute)...", "info");
+    const txHash = transferTx.hash;
+    console.log("✓ Transaction sent:", txHash);
     
-    // Wait for transaction to be confirmed
-    const transferReceipt = await transferTx.wait(1); // Wait for 1 confirmation
-    console.log("✓ Transaction confirmed");
-    
-    if (!transferReceipt) {
-      throw new Error("Transaction failed - no receipt returned");
-    }
-    
-    if (transferReceipt.status === 0) {
-      throw new Error("Transaction reverted on-chain");
-    }
-    
-    console.log("✅ Transfer successful:", transferReceipt.hash);
-    console.log("Gas used:", transferReceipt.gasUsed.toString());
-    
-    // Success!
+    // Show success immediately - transaction is on the blockchain!
     const explorerUrl = CONFIG.EXPLORER_URLS[userChainId];
     const tokenSymbol = networkConfig.name === "BNB Chain" ? "BNB" 
                       : networkConfig.name === "Polygon" ? "MATIC" 
                       : "ETH";
     
-    const txHash = transferReceipt.hash || transferTx.hash;
-    
+    // Display success immediately (transaction is already submitted)
     if (explorerUrl) {
       const txLink = `<a href="${explorerUrl}/tx/${txHash}" target="_blank" style="color: #10b981; text-decoration: underline; font-weight: 600;">${txHash.slice(0, 10)}...${txHash.slice(-8)}</a>`;
       el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
         <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
-        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Successful!</div>
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Sent!</div>
         <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
-        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Gas Used: ${ethers.formatEther(transferReceipt.gasUsed * (gasEstimate.gasPrice || BigInt(1)))}</div>
-        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">TX Hash:<br/>${txLink}</div>
+        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Transaction is now on the blockchain</div>
+        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">View: ${txLink}</div>
+        <div style="font-size: 11px; color: #999;">Confirming...</div>
       </div>`;
     } else {
       el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
         <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
-        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Successful!</div>
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Sent!</div>
+        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
+        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Transaction: ${txHash.slice(0, 10)}...${txHash.slice(-8)}</div>
+        <div style="font-size: 11px; color: #999;">Confirming...</div>
+      </div>`;
+    }
+    
+    // Wait for confirmation in the background (don't block the UI)
+    console.log("⏳ Waiting for blockchain confirmation...");
+    const transferReceipt = await transferTx.wait(1); // Wait for 1 confirmation
+    console.log("✓ Transaction confirmed:", transferReceipt.hash);
+    
+    // Update to show full confirmation
+    if (explorerUrl) {
+      const txLink = `<a href="${explorerUrl}/tx/${txHash}" target="_blank" style="color: #10b981; text-decoration: underline; font-weight: 600;">${txHash.slice(0, 10)}...${txHash.slice(-8)}</a>`;
+      el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
+        <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Confirmed!</div>
+        <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
+        <div style="color: #1e7a3d; margin-bottom: 12px; font-size: 13px;">Gas Used: ${transferReceipt ? ethers.formatEther(transferReceipt.gasUsed * (gasEstimate.gasPrice || BigInt(1))) : 'N/A'}</div>
+        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">TX: ${txLink}</div>
+      </div>`;
+    } else {
+      el.status.innerHTML = `<div style="text-align: center; padding: 24px; background: #ecfdf5; border-radius: 12px; border: 2px solid #10b981;">
+        <div style="font-size: 32px; margin-bottom: 12px;">✅</div>
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #065f46;">Payment Confirmed!</div>
         <div style="color: #1e7a3d; margin-bottom: 8px;">Amount: <strong>${ethers.formatEther(fixedAmount)} ${tokenSymbol}</strong></div>
         <div style="color: #1e7a3d; font-size: 13px;">To: <strong>${receiverAddress.slice(0, 6)}...${receiverAddress.slice(-4)}</strong></div>
       </div>`;
