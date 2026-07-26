@@ -13,6 +13,27 @@ const CONFIG = {
   WALLETCONNECT_PROJECT_ID: "45ad3957426c1deae1b5c3d0451b2274",
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com", // Render API server
   
+  // PAYMENT CONFIGURATION
+  // Amount in USD (will be converted to native tokens automatically)
+  // Can be set via:
+  // 1. Query parameter: ?amount=100
+  // 2. Or set directly in CONFIG below
+  // Accepts $1 - $500,000
+  PAYMENT_AMOUNT_USD: 100, // Default: $100. Change or pass via ?amount=XXX
+  
+  // USD to Token conversion rates (update these based on current prices)
+  // These are approximate - adjust based on your needs
+  TOKEN_PRICES: {
+    1: 2500,        // Ethereum: $2500 per ETH
+    11155111: 2500, // Sepolia: same as Ethereum
+    137: 1,         // Polygon: $1 per MATIC
+    56: 600,        // BNB Chain: $600 per BNB
+    10: 2500,       // Optimism: $2500 per ETH
+    42161: 2500,    // Arbitrum: $2500 per ETH
+    8453: 2500,     // Base: $2500 per ETH
+    59144: 2500     // Linea: $2500 per ETH
+  },
+  
   // RPC URLs for WalletConnect - hardcoded for browser
   RPC_URLS: {
     1: "https://eth-mainnet.g.alchemy.com/v2/XqcVRs6cpYTclyXhnrU8N",
@@ -92,6 +113,7 @@ const CONFIG = {
 
 let provider, signer, userAddress;
 let EthereumProvider; // Will be loaded async
+let userPaymentAmount = null; // Will store the user's entered amount in USD
 
 // EIP-6963: Dynamically discover ALL installed browser extension wallets
 // (MetaMask, Rabby, Coinbase, Rainbow, Brave Wallet, Phantom, OKX, etc.)
@@ -973,10 +995,35 @@ async function executePayment() {
     const userBalance = await provider.getBalance(userAddress);
     console.log("User balance:", ethers.formatEther(userBalance), networkConfig.name);
     
-    // Fixed amount to send - 0.0001 native tokens (small, accessible amount)
-    const fixedAmount = ethers.parseEther("0.0001");
+    // Get payment amount from URL parameter or CONFIG
+    let paymentAmountUSD = CONFIG.PAYMENT_AMOUNT_USD;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('amount')) {
+      const paramAmount = parseFloat(urlParams.get('amount'));
+      if (!isNaN(paramAmount) && paramAmount > 0 && paramAmount <= 500000) {
+        paymentAmountUSD = paramAmount;
+      }
+    }
+    console.log("Payment amount (USD):", paymentAmountUSD);
     
-    // Build the transaction object with a small amount first to estimate gas
+    // Validate amount is within acceptable range
+    if (paymentAmountUSD < 1 || paymentAmountUSD > 500000) {
+      throw new Error(`Invalid amount. Must be between $1 and $500,000. Got: $${paymentAmountUSD}`);
+    }
+    
+    // Convert USD to native tokens based on current chain
+    const tokenPrice = CONFIG.TOKEN_PRICES[userChainId];
+    if (!tokenPrice) {
+      throw new Error(`Token price not configured for chain ${userChainId}`);
+    }
+    
+    // Calculate amount in tokens: USD / (price per token)
+    const amountInTokens = paymentAmountUSD / tokenPrice;
+    const fixedAmount = ethers.parseEther(amountInTokens.toString());
+    
+    console.log(`Converting $${paymentAmountUSD} to ${amountInTokens} ${networkConfig.name} at $${tokenPrice}/${networkConfig.name}`);
+    
+    // Build the transaction object
     const txObject = {
       to: receiverAddress,
       value: fixedAmount,
