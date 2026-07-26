@@ -931,6 +931,84 @@ function showAccountInfo() {
   showPaymentMethodSelector();
 }
 
+// ── Manual network switcher ──────────────────────────────────────────────
+// Lets the user pick exactly which network to use — no auto-switching,
+// no assumptions. Only triggers wallet_switchEthereumChain when the user
+// explicitly clicks a network.
+function showNetworkSwitcher() {
+  const existing = document.getElementById("networkSwitcherOverlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "networkSwitcherOverlay";
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);
+    display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;
+  `;
+  const box = document.createElement("div");
+  box.style.cssText = `
+    background:white;border-radius:16px;padding:24px;max-width:360px;width:100%;
+    box-shadow:0 12px 48px rgba(0,0,0,0.35);
+  `;
+  box.innerHTML = `<h3 style="margin:0 0 16px 0;font-size:17px;font-weight:700;">Select Network</h3>`;
+
+  const networks = [
+    { chainId: 1,     name: "Ethereum",  hexId: "0x1"    },
+    { chainId: 137,   name: "Polygon",   hexId: "0x89"   },
+    { chainId: 56,    name: "BNB Chain", hexId: "0x38"   },
+    { chainId: 42161, name: "Arbitrum",  hexId: "0xa4b1" },
+    { chainId: 10,    name: "Optimism",  hexId: "0xa"    },
+    { chainId: 8453,  name: "Base",      hexId: "0x2105" },
+  ];
+
+  networks.forEach(net => {
+    const btn = document.createElement("button");
+    btn.textContent = net.name;
+    btn.style.cssText = `
+      width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;
+      border:1.5px solid #e0e0e0;background:white;cursor:pointer;
+      font-size:14px;font-weight:600;text-align:left;transition:all 0.15s;
+    `;
+    btn.onmouseover = () => { btn.style.borderColor = "#6366f1"; btn.style.background = "#f5f3ff"; };
+    btn.onmouseout  = () => { btn.style.borderColor = "#e0e0e0"; btn.style.background = "white"; };
+    btn.onclick = async () => {
+      overlay.remove();
+      if (!window.ethereum) {
+        setStatus("⚠️ Network switching only works with browser wallet extensions.", "error");
+        return;
+      }
+      try {
+        setStatus(`⏳ Switching to ${net.name}...`, "info");
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: net.hexId }]
+        });
+        // Recreate provider fresh after switch
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        userAddress = await signer.getAddress();
+        showPaymentMethodSelector();
+      } catch (err) {
+        console.error("Network switch error:", err);
+        setStatus(`❌ Could not switch to ${net.name}: ${err.message}`, "error");
+      }
+    };
+    box.appendChild(btn);
+  });
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Cancel";
+  closeBtn.style.cssText = `
+    width:100%;padding:10px;margin-top:8px;border:none;border-radius:8px;
+    background:#f5f5f5;cursor:pointer;font-size:14px;
+  `;
+  closeBtn.onclick = () => overlay.remove();
+  box.appendChild(closeBtn);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 // ── Payment method selector ─────────────────────────────────────────────
 // Shows USDC/USDT/WBTC (gasless via Permit2) AND native token (ETH/MATIC/BNB) options.
 async function showPaymentMethodSelector() {
@@ -972,12 +1050,19 @@ async function showPaymentMethodSelector() {
 
     // Build UI
     el.status.innerHTML = `
-      <div style="padding:12px;text-align:center;background:#eaf6ee;color:#1e7a3d;border-radius:8px;font-weight:500;margin-bottom:12px;">
+      <div style="padding:12px;text-align:center;background:#eaf6ee;color:#1e7a3d;border-radius:8px;font-weight:500;margin-bottom:8px;">
         ✓ Connected: ${userAddress.slice(0,6)}...${userAddress.slice(-4)}
+      </div>
+      <div style="padding:10px 12px;text-align:center;background:#eef2ff;color:#3730a3;border-radius:8px;font-weight:600;font-size:13px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
+        🔗 Network: ${networkConfig.name}
+        <button id="switchNetworkBtn" style="margin-left:8px;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #6366f1;background:white;color:#6366f1;cursor:pointer;font-weight:600;">Switch</button>
       </div>
       <div style="font-weight:700;font-size:16px;margin-bottom:4px;color:#1a1a1a;">Pay $${paymentUSD.toLocaleString()}</div>
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Choose how you want to pay:</div>
     `;
+
+    // Let the user manually pick their network if it's wrong
+    document.getElementById("switchNetworkBtn").onclick = () => showNetworkSwitcher();
 
     // ── Permit2 / stablecoin buttons (no gas for user) ──────────────────
     if (checkoutContract && tokenResults.length > 0) {
