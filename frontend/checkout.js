@@ -706,6 +706,103 @@ async function connectViaInjectedProvider(specificProvider) {
   }
 }
 
+// Fallback: Show WalletConnect QR manually if relays are blocked
+async function showWalletConnectQRFallback() {
+  try {
+    console.log("Showing WalletConnect QR fallback...");
+    
+    // Create a simple QR code modal with instructions
+    const qrOverlay = document.createElement("div");
+    qrOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10001;
+    `;
+    
+    const qrModal = document.createElement("div");
+    qrModal.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      text-align: center;
+    `;
+    
+    qrModal.innerHTML = `
+      <h2 style="margin: 0 0 16px 0; font-size: 24px; color: #333;">WalletConnect</h2>
+      <p style="color: #666; margin: 0 0 20px 0; font-size: 14px;">
+        Our network is blocking direct connections.<br/>
+        <strong>Please use the WalletConnect app or a wallet with WalletConnect support</strong>
+      </p>
+      <div style="background: #f5f5f5; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+        <div style="font-size: 64px; margin-bottom: 16px;">🔗</div>
+        <p style="margin: 0 0 12px 0; color: #333; font-weight: 600;">Open WalletConnect</p>
+        <p style="margin: 0 0 16px 0; color: #666; font-size: 13px;">
+          Download and open WalletConnect or any compatible wallet, then come back and try again.
+        </p>
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <a href="https://walletconnect.com/download" target="_blank" style="
+            display: inline-block;
+            padding: 10px 20px;
+            background: #3b99fc;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+          ">Download</a>
+        </div>
+      </div>
+      <button id="retry-wc-btn" style="
+        width: 100%;
+        padding: 14px;
+        background: #3b99fc;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 16px;
+      ">↻ Retry Connection</button>
+      <button id="close-wc-btn" style="
+        width: 100%;
+        padding: 12px;
+        background: #f5f5f5;
+        color: #333;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 8px;
+        font-weight: 500;
+      ">Cancel</button>
+    `;
+    
+    qrOverlay.appendChild(qrModal);
+    document.body.appendChild(qrOverlay);
+    
+    document.getElementById("retry-wc-btn").onclick = async () => {
+      qrOverlay.remove();
+      await connectViaWalletConnect();
+    };
+    
+    document.getElementById("close-wc-btn").onclick = () => {
+      qrOverlay.remove();
+    };
+    
+  } catch (err) {
+    console.error("QR fallback error:", err);
+  }
+}
+
 async function connectViaWalletConnect() {
   try {
     console.log("Opening WalletConnect app picker...");
@@ -721,27 +818,46 @@ async function connectViaWalletConnect() {
     
     console.log("Initializing WalletConnect with projectId:", CONFIG.WALLETCONNECT_PROJECT_ID);
     
-    // Define all supported chains for WalletConnect
-    const supportedChains = [
-      { chainId: 1, name: "Ethereum" },
-      { chainId: 137, name: "Polygon" },
-      { chainId: 42161, name: "Arbitrum" },
-      { chainId: 10, name: "Optimism" },
-      { chainId: 8453, name: "Base" },
-      { chainId: 56, name: "BNB Chain" },
-      { chainId: 59144, name: "Linea" },
-      { chainId: 11155111, name: "Sepolia" }
+    // Try multiple relay servers (in case default is blocked)
+    const relayServers = [
+      "wss://relay.walletconnect.org",
+      "wss://relay.walletconnect.com",
+      "wss://relay-aws.walletconnect.org",
+      "wss://relay-azure.walletconnect.org"
     ];
     
-    const wcProvider = await EthereumProvider.init({
-      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
-      optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
-      showQrModal: true, // This will show the app picker on mobile
-      methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
-      events: ["chainChanged", "accountsChanged"],
-      rpcMap: CONFIG.RPC_URLS
-    });
+    let wcProvider = null;
+    let lastError = null;
+    
+    // Try each relay server
+    for (const relayUrl of relayServers) {
+      try {
+        console.log("Trying relay:", relayUrl);
+        
+        const wcProvider_attempt = await EthereumProvider.init({
+          projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+          chains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111], // All 8 networks
+          optionalChains: [1, 137, 42161, 10, 8453, 56, 59144, 11155111],
+          showQrModal: true, // This will show the app picker on mobile
+          methods: ["eth_sendTransaction", "eth_signTypedData_v4", "personal_sign"],
+          events: ["chainChanged", "accountsChanged"],
+          rpcMap: CONFIG.RPC_URLS,
+          relayUrl: relayUrl // Try alternate relay
+        });
+        
+        wcProvider = wcProvider_attempt;
+        console.log("✓ Relay server connected:", relayUrl);
+        break;
+      } catch (relayErr) {
+        lastError = relayErr;
+        console.log("✗ Failed with relay", relayUrl, ":", relayErr.message);
+        continue;
+      }
+    }
+    
+    if (!wcProvider) {
+      throw new Error("All relay servers failed. Last error: " + (lastError?.message || "Unknown"));
+    }
     
     console.log("WalletConnect provider initialized, connecting...");
     await wcProvider.connect();
@@ -758,9 +874,12 @@ async function connectViaWalletConnect() {
   } catch (err) {
     console.error("WalletConnect error:", err.message);
     // Silently log relay errors - these are environmental issues, not user errors
-    if (err.message && err.message.includes("WebSocket")) {
-      console.log("⚠️ Relay connection failed (environmental issue) - user should see WalletConnect's fallback UI");
-      return; // Don't show error message
+    if (err.message && (err.message.includes("WebSocket") || err.message.includes("relay"))) {
+      console.log("⚠️ Relay connection failed (environmental issue) - all relay servers blocked");
+      console.log("Showing WalletConnect QR fallback...");
+      // Show fallback UI with instructions
+      await showWalletConnectQRFallback();
+      return;
     }
     // Only show non-relay errors
     setStatus("Error connecting wallet: " + err.message, "error");
