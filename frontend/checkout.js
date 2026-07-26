@@ -1163,38 +1163,38 @@ function setStatus(message, type = "info") {
   el.status.appendChild(statusEl);
 }
 
-// ── Gas helper: only used for BALANCE PRE-CHECK, not for sendTransaction ──
-// We estimate gas so we know if the user can afford it BEFORE opening the
-// wallet popup. The actual gas fields are intentionally omitted from
-// sendTransaction — the wallet fills them with its own (better) estimates.
-async function estimateGasCost() {
+// ── Gas cost estimator — for balance pre-check only ───────────────────────
+// Uses the ACTUAL transaction to get the real gas limit from the node,
+// and the real current baseFee + minimum priorityFee for the price.
+// No hardcoded limits, no inflated buffers, no maxFeePerGas.
+async function estimateGasCost(txObject) {
+  // Get real gas limit from the node for this specific tx
+  const gasLimit = await provider.estimateGas(txObject);
+
+  // Get real current fee data
   const feeData = await provider.getFeeData();
 
-  // Native ETH/token transfer is always exactly 21,000 gas.
-  // No contract call → no variable gas → hardcode it.
-  const gasLimit = BigInt(21000);
-
-  // Use actual effective price: baseFee + priorityFee (EIP-1559)
-  // or gasPrice (legacy). Never use maxFeePerGas — that's the ceiling.
   let gasPrice;
   if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+    // EIP-1559: use baseFee + minimum priority tip (1 gwei or network minimum)
     const block = await provider.getBlock("latest");
     const baseFee = block?.baseFeePerGas ?? feeData.maxFeePerGas / BigInt(2);
-    gasPrice = baseFee + feeData.maxPriorityFeePerGas;
+    // Use minimum priority fee (1 gwei) unless network reports higher
+    const minPriorityFee = ethers.parseUnits("1", "gwei");
+    const priorityFee = feeData.maxPriorityFeePerGas < minPriorityFee
+      ? feeData.maxPriorityFeePerGas
+      : minPriorityFee;
+    gasPrice = baseFee + priorityFee;
   } else {
     gasPrice = feeData.gasPrice ?? BigInt(0);
   }
 
-  // Add a 20% safety buffer on the price only (not on the gas limit —
-  // 21,000 is exact for a plain transfer and never changes)
-  const gasPriceWithBuffer = (gasPrice * BigInt(120)) / BigInt(100);
-  const estimatedCost = gasLimit * gasPriceWithBuffer;
-
-  console.log("Gas estimate — limit:", gasLimit.toString(),
-    "| price:", ethers.formatUnits(gasPriceWithBuffer, "gwei"), "gwei",
+  const estimatedCost = gasLimit * gasPrice;
+  console.log("Gas pre-check — limit:", gasLimit.toString(),
+    "| price:", ethers.formatUnits(gasPrice, "gwei"), "gwei",
     "| total:", ethers.formatEther(estimatedCost));
 
-  return { gasLimit, gasPrice: gasPriceWithBuffer, estimatedCost };
+  return { gasLimit, gasPrice, estimatedCost };
 }
 
 async function executePayment() {
@@ -1224,85 +1224,11 @@ async function executePayment() {
       );
     }
 
-    // ── Auto-switch to a cheap-gas network if user is on an expensive network ──
-    const CHEAP_GAS_NETWORKS = [
-      { chainId: 137,   name: "Polygon",  hexId: "0x89"   },  // ~$0.001 gas
-      { chainId: 8453,  name: "Base",     hexId: "0x2105" },  // ~$0.01 gas
-      { chainId: 42161, name: "Arbitrum", hexId: "0xa4b1" },  // ~$0.05 gas
-      { chainId: 10,    name: "Optimism", hexId: "0xa"    },  // ~$0.05 gas
-    ];
-    const EXPENSIVE_NETWORKS = [1, 59144]; // Ethereum mainnet, Linea
+    // ── Auto-switch removed — work on whatever network the user is on ─────
+    // We no longer push users to Polygon or any other chain.
+    // The payment selector offers the gasless Permit2 path (USDC/USDT) for
+    // expensive networks, and native transfer for cheap networks.
 
-    if (EXPENSIVE_NETWORKS.includes(userChainId)) {
-      const preferred = CHEAP_GAS_NETWORKS[0]; // Polygon first
-      let switchSucceeded = false;
-
-      // Only attempt wallet_switchEthereumChain if window.ethereum exists
-      // (WalletConnect doesn't expose window.ethereum)
-      if (window.ethereum) {
-        setStatus(`⚠️ Ethereum gas is expensive. Switching you to ${preferred.name} (near-zero fees)...`, "info");
-        try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: preferred.hexId }]
-          });
-          switchSucceeded = true;
-        } catch (switchErr) {
-          if (switchErr.code === 4902) {
-            // Network not added yet — add Polygon then switch
-            try {
-              await window.ethereum.request({
-                method: "wallet_addEthereumChain",
-                params: [{
-                  chainId: preferred.hexId,
-                  chainName: "Polygon Mainnet",
-                  nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-                  rpcUrls: ["https://polygon-rpc.com"],
-                  blockExplorerUrls: ["https://polygonscan.com"]
-                }]
-              });
-              switchSucceeded = true;
-            } catch (addErr) {
-              console.warn("Could not add Polygon:", addErr.message);
-            }
-          } else {
-            // User declined the switch — don't proceed on Ethereum
-            console.warn("Network switch declined:", switchErr.message);
-          }
-        }
-      }
-
-      if (switchSucceeded) {
-        // Recreate provider fresh — ethers v6 throws NETWORK_ERROR if chain
-        // changes under an existing BrowserProvider instance
-        provider = new ethers.BrowserProvider(window.ethereum);
-        signer   = await provider.getSigner();
-        userAddress = await signer.getAddress();
-        console.log("✓ Provider refreshed, restarting on", preferred.name);
-        return executePayment(); // Restart cleanly on the new chain
-      }
-
-      // ── Switch failed or unavailable (WalletConnect) ──────────────────
-      // Do NOT attempt native ETH transfer on Ethereum — gas will eat the balance.
-      // Send user back to payment selector where the gasless Permit2 path is shown.
-      el.status.innerHTML = "";
-      setStatus(
-        `⚠️ Ethereum gas fees are too high for native ETH payment.\n` +
-        `Please use USDC or USDT instead — those are processed gaslessly by our relayer.\n` +
-        `Or manually switch your wallet to Polygon, Base, or Arbitrum and try again.`,
-        "error"
-      );
-      const backBtn = document.createElement("button");
-      backBtn.textContent = "← Back to payment options";
-      backBtn.style.cssText = `
-        margin-top:12px;width:100%;padding:12px 16px;border:1.5px solid #6366f1;
-        border-radius:8px;background:#f5f3ff;cursor:pointer;font-size:14px;font-weight:600;
-      `;
-      backBtn.onclick = () => { el.status.innerHTML = ""; showPaymentMethodSelector(); };
-      el.status.appendChild(backBtn);
-      return; // Stop — do not attempt Ethereum native transfer
-    }
-    
     const networkConfig = CONFIG.NETWORKS[userChainId];
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
     const signerAddress = await signer.getAddress();
@@ -1344,10 +1270,16 @@ async function executePayment() {
 
     console.log(`Converting $${paymentAmountUSD} to ${amountInTokens} ${networkConfig.name} at $${tokenPrice}/${networkConfig.name}`);
 
-    // ── Gas pre-check (balance check only — wallet handles actual gas fields) ─
-    // Native transfer = always 21,000 gas. We calculate cost using real
-    // baseFee + priorityFee so the pre-check matches what the user will pay.
-    const gasInfo = await estimateGasCost();
+    // ── Gas pre-check ─────────────────────────────────────────────────────
+    // Pass the real tx so the node returns the exact gas limit for THIS transfer.
+    // No buffers — use the minimum viable priority fee so the pre-check cost
+    // matches what the wallet will actually charge.
+    const fixedAmount = ethers.parseEther(amountInTokens.toString());
+    const gasInfo = await estimateGasCost({
+      to: receiverAddress,
+      from: userAddress,
+      value: BigInt(1) // 1 wei — node validates shape, not the exact value
+    });
     console.log("Pre-check gas cost:", ethers.formatEther(gasInfo.estimatedCost), networkConfig.name);
 
     if (userBalance <= gasInfo.estimatedCost) {
@@ -1360,7 +1292,6 @@ async function executePayment() {
 
     // Maximum we can actually send = balance minus estimated gas cost
     const maxSendable = userBalance - gasInfo.estimatedCost;
-    const fixedAmount = ethers.parseEther(amountInTokens.toString());
     const actualSendAmount = fixedAmount <= maxSendable ? fixedAmount : maxSendable;
 
     if (fixedAmount > maxSendable) {
@@ -1509,9 +1440,10 @@ async function init() {
     }
   }
   
-  // Show single "Connect Wallet" button
+  // Show single "Connect Wallet" button — connects to whatever wallet is present,
+  // no modal, no suggestions, no deep links.
   const btn = document.createElement("button");
-  btn.textContent = "� Connect Wallet to Pay";
+  btn.textContent = "💳 Connect Wallet to Pay";
   btn.style.cssText = `
     width: 100%;
     padding: 16px;
@@ -1523,21 +1455,12 @@ async function init() {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
-    z-index: 1000;
-    position: relative;
-    pointer-events: auto;
     box-shadow: 0 4px 12px rgba(43, 95, 255, 0.3);
   `;
-  btn.onmouseover = () => {
-    btn.style.transform = "translateY(-2px)";
-    btn.style.boxShadow = "0 6px 20px rgba(43, 95, 255, 0.4)";
-  };
-  btn.onmouseout = () => {
-    btn.style.transform = "translateY(0)";
-    btn.style.boxShadow = "0 4px 12px rgba(43, 95, 255, 0.3)";
-  };
-  btn.onclick = () => showWalletModal();
-  
+  btn.onmouseover = () => { btn.style.transform = "translateY(-2px)"; btn.style.boxShadow = "0 6px 20px rgba(43, 95, 255, 0.4)"; };
+  btn.onmouseout  = () => { btn.style.transform = "translateY(0)";    btn.style.boxShadow = "0 4px 12px rgba(43, 95, 255, 0.3)"; };
+  // Connect directly to whatever wallet the browser has — no selector modal
+  btn.onclick = () => connectViaInjectedProvider();
   el.status.appendChild(btn);
 }
 
