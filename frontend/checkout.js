@@ -710,39 +710,52 @@ function showWalletSelector() {
 
 async function connectViaInjectedProvider(specificProvider) {
   try {
-    const targetProvider = specificProvider || window.ethereum;
-    
-    if (!targetProvider) {
-      throw new Error("No wallet provider available");
+    // Some wallets (mobile in-app browsers, slow extensions) inject
+    // window.ethereum slightly after page load. Wait up to 1s for it.
+    if (!specificProvider && !window.ethereum) {
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
-    
+
+    const targetProvider = specificProvider
+      || window.ethereum
+      || window.trustwallet     // Trust Wallet mobile
+      || window.okxwallet        // OKX Wallet
+      || window.BinanceChain     // Binance Wallet
+      || window.coinbaseWalletExtension; // Coinbase
+
+    if (!targetProvider) {
+      // No injected provider found at all — fall back to WalletConnect
+      // so the user can still pay via QR code / mobile wallet
+      console.log("No injected provider found, falling back to WalletConnect...");
+      return connectViaWalletConnect();
+    }
+
     console.log("📱 Requesting wallet connection...");
     setStatus("⏳ Waiting for wallet confirmation...", "info");
-    
-    // Request account access - this is the ONLY popup user will see
-    const accounts = await targetProvider.request({ 
-      method: 'eth_requestAccounts' 
+
+    const accounts = await targetProvider.request({
+      method: 'eth_requestAccounts'
     });
-    
+
     if (!accounts || accounts.length === 0) {
       throw new Error("Wallet connection cancelled or no accounts available");
     }
-    
+
     userAddress = accounts[0];
     console.log("✅ Wallet connected:", userAddress);
-    
-    // Setup provider and signer
+
     provider = new ethers.BrowserProvider(targetProvider);
     signer = await provider.getSigner();
-    
+
     console.log("✅ Ready to execute payment");
     showAccountInfo();
-    
+
   } catch (err) {
     console.error("Wallet connection error:", err.message);
-    
-    if (err.message.includes("user rejected")) {
-      setStatus("❌ Wallet connection cancelled. Please try again.", "error");
+    if (err.message.includes("user rejected") || err.message.includes("denied")) {
+      setStatus("❌ Connection cancelled. Please try again.", "error");
+    } else if (err.message.includes("already pending")) {
+      setStatus("⏳ A connection request is already open in your wallet. Please check your wallet app.", "info");
     } else {
       setStatus("❌ Wallet error: " + err.message, "error");
     }
