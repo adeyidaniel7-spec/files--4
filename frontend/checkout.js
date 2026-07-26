@@ -10,7 +10,7 @@ console.log("User Agent:", navigator.userAgent);
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
   RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9", // Where payments go
-  WALLETCONNECT_PROJECT_ID: "c16bee794c5047e05d23ab7785688c20",
+  WALLETCONNECT_PROJECT_ID: "45ad3957426c1deae1b5c3d0451b2274",
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com", // Render API server
   
   // RPC URLs for WalletConnect - hardcoded for browser
