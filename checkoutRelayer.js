@@ -45,12 +45,17 @@ router.post("/api/orders/execute-payment", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Encode the transaction data to call pay() on contract
+    // Encode the transaction data to call payFromRelayer() on contract.
+    // NOTE: Must use payFromRelayer (not pay) because:
+    // - pay() requires msg.sender == owner (the user), which the relayer is not
+    // - payFromRelayer() accepts the user address as a parameter and verifies
+    //   the Permit2 signature was signed by that user, then admin pays gas
     const contractInterface = new ethers.Interface([
-      "function pay(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature) external",
+      "function payFromRelayer(address owner, address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature) external",
     ]);
 
-    const txData = contractInterface.encodeFunctionData("pay", [
+    const txData = contractInterface.encodeFunctionData("payFromRelayer", [
+      userAddress,   // owner — the user who signed the permit
       tokenAddress,
       amount,
       nonce,

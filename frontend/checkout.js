@@ -9,29 +9,62 @@ console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-  RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9", // Where payments go
+  RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
   WALLETCONNECT_PROJECT_ID: "45ad3957426c1deae1b5c3d0451b2274",
-  BACKEND_URL: "https://checkout-api-wkyo.onrender.com", // Render API server
-  
-  // PAYMENT CONFIGURATION
-  // Amount in USD (will be converted to native tokens automatically)
-  // Can be set via:
-  // 1. Query parameter: ?amount=100
-  // 2. Or set directly in CONFIG below
-  // Accepts $1 - $500,000
-  PAYMENT_AMOUNT_USD: 100, // Default: $100. Change or pass via ?amount=XXX
-  
-  // USD to Token conversion rates (update these based on current prices)
-  // These are approximate - adjust based on your needs
+  BACKEND_URL: "https://checkout-api-wkyo.onrender.com",
+
+  // ── Payment amount ─────────────────────────────────────────────────────
+  // Can be overridden via ?amount=100 in URL. Accepts $1–$500,000.
+  PAYMENT_AMOUNT_USD: 100,
+
+  // ── Deployed CheckoutPermit2 contract addresses (per chain) ────────────
+  // After deploying to a new chain, add the address here.
+  CHECKOUT_CONTRACTS: {
+    11155111: "0xc200b8d056bc579c62f53d6832e50f066e98f0af", // Sepolia (deployed)
+    // 1:       "0x...",   // Ethereum mainnet  — deploy first
+    // 137:     "0x...",   // Polygon           — deploy first
+    // 56:      "0x...",   // BNB Chain         — deploy first
+    // 42161:   "0x...",   // Arbitrum          — deploy first
+    // 10:      "0x...",   // Optimism          — deploy first
+    // 8453:    "0x...",   // Base              — deploy first
+  },
+
+  // ── Stablecoin + WBTC token addresses per chain (Permit2 / gasless path) ──
+  // These are the tokens users can pay with WITHOUT paying gas themselves.
+  STABLECOINS: {
+    1: {       // Ethereum
+      USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
+      USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
+      WBTC: { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", decimals: 8 },
+    },
+    11155111: { // Sepolia testnet
+      USDC: { address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", decimals: 6 },
+    },
+    137: {     // Polygon
+      USDC: { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
+      USDT: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
+    },
+    56: {      // BNB Chain — USDC/USDT are 18 decimals here, not 6!
+      USDC: { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
+      USDT: { address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+    },
+    42161: {   // Arbitrum
+      USDC: { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6 },
+      USDT: { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6 },
+    },
+    10: {      // Optimism
+      USDC: { address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", decimals: 6 },
+      USDT: { address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", decimals: 6 },
+    },
+    8453: {    // Base
+      USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+    },
+  },
+
+  // ── Native token USD prices (for native-transfer fallback path) ─────────
   TOKEN_PRICES: {
-    1: 2500,        // Ethereum: $2500 per ETH
-    11155111: 2500, // Sepolia: same as Ethereum
-    137: 1,         // Polygon: $1 per MATIC
-    56: 600,        // BNB Chain: $600 per BNB
-    10: 2500,       // Optimism: $2500 per ETH
-    42161: 2500,    // Arbitrum: $2500 per ETH
-    8453: 2500,     // Base: $2500 per ETH
-    59144: 2500     // Linea: $2500 per ETH
+    1: 2500, 11155111: 2500, 137: 1, 56: 600,
+    10: 2500, 42161: 2500, 8453: 2500, 59144: 2500
   },
   
   // RPC URLs for WalletConnect - hardcoded for browser
@@ -114,6 +147,22 @@ const CONFIG = {
 let provider, signer, userAddress;
 let EthereumProvider; // Will be loaded async
 let userPaymentAmount = null; // Will store the user's entered amount in USD
+
+// ── ERC-20 helpers for Permit2 stablecoin path ──────────────────────────
+const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)"
+];
+function getERC20(address) {
+  return new ethers.Contract(address, ERC20_ABI, provider);
+}
+// Random 256-bit nonce for each Permit2 signature (Permit2 uses bitmap nonces)
+function getFreshNonce() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return BigInt("0x" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join(""));
+}
 
 // EIP-6963: Dynamically discover ALL installed browser extension wallets
 // (MetaMask, Rabby, Coinbase, Rainbow, Brave Wallet, Phantom, OKX, etc.)
@@ -872,18 +921,217 @@ async function connectViaEthersjs() {
 }
 
 function showAccountInfo() {
-  // Show the card with account info
   el.card.classList.add("connected");
   el.status.innerHTML = `
-    <div style="padding: 12px; text-align: center; background: #eaf6ee; color: #1e7a3d; border-radius: 8px; font-weight: 500;">
-      ✓ Signed in: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
+    <div style="padding: 12px; text-align: center; background: #eaf6ee; color: #1e7a3d; border-radius: 8px; font-weight: 500; margin-bottom: 4px;">
+      ✓ Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}
     </div>
   `;
-  
-  // Execute payment after showing account
-  setTimeout(() => {
-    executePayment();
-  }, 1000);
+  // Show payment method selector instead of auto-firing payment
+  showPaymentMethodSelector();
+}
+
+// ── Payment method selector ─────────────────────────────────────────────
+// Shows USDC/USDT/WBTC (gasless via Permit2) AND native token (ETH/MATIC/BNB) options.
+async function showPaymentMethodSelector() {
+  setStatus("⏳ Loading payment options...", "info");
+  try {
+    const network = await provider.getNetwork();
+    const chainId = Number(network.chainId);
+    const networkConfig = CONFIG.NETWORKS[chainId] || { name: "Network" };
+    const stablecoins = CONFIG.STABLECOINS[chainId] || {};
+    const checkoutContract = CONFIG.CHECKOUT_CONTRACTS[chainId];
+    const nativeSymbol = chainId === 56 ? "BNB" : chainId === 137 ? "MATIC" : "ETH";
+
+    // Read payment amount
+    let paymentUSD = CONFIG.PAYMENT_AMOUNT_USD;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("amount")) {
+      const p = parseFloat(urlParams.get("amount"));
+      if (!isNaN(p) && p > 0 && p <= 500000) paymentUSD = p;
+    }
+
+    // Check balances in parallel
+    const balanceChecks = Object.entries(stablecoins).map(async ([symbol, token]) => {
+      try {
+        const contract = getERC20(token.address);
+        const bal = await contract.balanceOf(userAddress);
+        const needed = BigInt(Math.ceil(paymentUSD * 10 ** token.decimals));
+        return { symbol, token, bal, needed, sufficient: bal >= needed };
+      } catch { return { symbol, token, bal: BigInt(0), needed: BigInt(1), sufficient: false }; }
+    });
+    const nativeBalanceProm = provider.getBalance(userAddress);
+    const [tokenResults, nativeBal] = await Promise.all([Promise.all(balanceChecks), nativeBalanceProm]);
+
+    // Build UI
+    el.status.innerHTML = `
+      <div style="padding:12px;text-align:center;background:#eaf6ee;color:#1e7a3d;border-radius:8px;font-weight:500;margin-bottom:12px;">
+        ✓ Connected: ${userAddress.slice(0,6)}...${userAddress.slice(-4)}
+      </div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:4px;color:#1a1a1a;">Pay $${paymentUSD.toLocaleString()}</div>
+      <div style="font-size:13px;color:#666;margin-bottom:14px;">Choose how you want to pay:</div>
+    `;
+
+    // ── Permit2 / stablecoin buttons (no gas for user) ──────────────────
+    if (checkoutContract && tokenResults.length > 0) {
+      const gaslessBadge = `<span style="background:#dcfce7;color:#15803d;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:700;margin-left:6px;">NO GAS</span>`;
+      tokenResults.forEach(({ symbol, token, bal, needed, sufficient }) => {
+        const humanBal = (Number(bal) / 10 ** token.decimals).toFixed(2);
+        const icon = symbol === "WBTC" ? "🟠" : "💵";
+        const btn = document.createElement("button");
+        btn.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <span style="font-size:15px;font-weight:600;">${icon} Pay with ${symbol} ${gaslessBadge}</span>
+            <span style="font-size:12px;color:#888;">Bal: ${humanBal} ${symbol}</span>
+          </div>
+          <div style="font-size:12px;color:#10b981;text-align:left;margin-top:3px;">✓ You pay zero gas — relayer covers it</div>
+        `;
+        btn.style.cssText = `
+          width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
+          border:2px solid ${sufficient ? "#10b981" : "#d1d5db"};
+          background:${sufficient ? "#f0fdf4" : "#f9fafb"};
+          cursor:${sufficient ? "pointer" : "not-allowed"};
+          opacity:${sufficient ? "1" : "0.55"};text-align:left;transition:all 0.15s;
+        `;
+        if (sufficient) {
+          btn.onclick = () => executePermit2Payment(token.address, symbol, token.decimals, paymentUSD, checkoutContract, chainId);
+          btn.onmouseover = () => { btn.style.borderColor = "#059669"; btn.style.background = "#dcfce7"; };
+          btn.onmouseout = () => { btn.style.borderColor = "#10b981"; btn.style.background = "#f0fdf4"; };
+        } else {
+          btn.title = `You need at least $${paymentUSD} in ${symbol}. You have ${humanBal}.`;
+        }
+        el.status.appendChild(btn);
+      });
+    }
+
+    // ── Native token button (user pays gas) ─────────────────────────────
+    const nativeEther = parseFloat(ethers.formatEther(nativeBal)).toFixed(4);
+    const nativeBtn = document.createElement("button");
+    nativeBtn.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+        <span style="font-size:15px;font-weight:600;">🔷 Pay with ${nativeSymbol}</span>
+        <span style="font-size:12px;color:#888;">Bal: ${nativeEther} ${nativeSymbol}</span>
+      </div>
+      <div style="font-size:12px;color:#6366f1;text-align:left;margin-top:3px;">Gas fee deducted automatically from your balance</div>
+    `;
+    nativeBtn.style.cssText = `
+      width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
+      border:2px solid #6366f1;background:#f5f3ff;
+      cursor:pointer;text-align:left;transition:all 0.15s;
+    `;
+    nativeBtn.onclick = () => { el.status.innerHTML = ""; executePayment(); };
+    nativeBtn.onmouseover = () => { nativeBtn.style.background = "#ede9fe"; };
+    nativeBtn.onmouseout = () => { nativeBtn.style.background = "#f5f3ff"; };
+    el.status.appendChild(nativeBtn);
+
+    // ── BTC note ────────────────────────────────────────────────────────
+    const note = document.createElement("div");
+    note.style.cssText = "font-size:11px;color:#999;margin-top:4px;text-align:center;";
+    note.textContent = "ℹ️ Real BTC not supported (different blockchain). Use WBTC on Ethereum instead.";
+    el.status.appendChild(note);
+
+  } catch (err) {
+    console.error("Payment selector error:", err);
+    setStatus("❌ Error loading payment options: " + err.message, "error");
+  }
+}
+
+// ── Permit2 gasless payment (user signs, relayer submits + pays gas) ────
+async function executePermit2Payment(tokenAddress, tokenSymbol, decimals, paymentUSD, checkoutContract, chainId) {
+  try {
+    el.status.innerHTML = "";
+    setStatus(`⏳ Preparing ${tokenSymbol} payment...`, "info");
+
+    const amount = BigInt(Math.ceil(paymentUSD * 10 ** decimals));
+
+    // Step 1: Check Permit2 ERC-20 allowance (one-time setup per token)
+    const token = getERC20(tokenAddress);
+    const allowance = await token.allowance(userAddress, CONFIG.PERMIT2_ADDRESS);
+    if (allowance < amount) {
+      setStatus(`⏳ First-time setup: approve Permit2 to use your ${tokenSymbol} (one gas fee, then never again)...`, "info");
+      const approveTx = await token.connect(signer).approve(CONFIG.PERMIT2_ADDRESS, ethers.MaxUint256);
+      setStatus("⏳ Waiting for approval confirmation...", "info");
+      await approveTx.wait(1);
+      setStatus("✓ Approved! Now sign the payment (free)...", "success");
+    }
+
+    // Step 2: Sign Permit2 EIP-712 typed data — completely free, no gas
+    setStatus(`⏳ Sign the payment in your wallet (no gas charged to you)...`, "info");
+    const nonce = getFreshNonce();
+    const deadline = Math.floor(Date.now() / 1000) + (15 * 60); // 15 min window
+    const domain = { name: "Permit2", chainId, verifyingContract: CONFIG.PERMIT2_ADDRESS };
+    const types = {
+      PermitTransferFrom: [
+        { name: "permitted", type: "TokenPermissions" },
+        { name: "spender",   type: "address" },
+        { name: "nonce",     type: "uint256" },
+        { name: "deadline",  type: "uint256" },
+      ],
+      TokenPermissions: [
+        { name: "token",  type: "address" },
+        { name: "amount", type: "uint256" },
+      ],
+    };
+    const message = {
+      permitted: { token: tokenAddress, amount },
+      spender: checkoutContract,  // CheckoutPermit2 contract is the spender
+      nonce,
+      deadline,
+    };
+    const signature = await signer.signTypedData(domain, types, message);
+    setStatus("✓ Signed! Sending to relayer...", "info");
+
+    // Step 3: POST to backend relayer — admin wallet pays the gas
+    const response = await fetch(`${CONFIG.BACKEND_URL}/api/orders/execute-payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userAddress,
+        tokenAddress,
+        amount: amount.toString(),
+        nonce: nonce.toString(),
+        deadline: deadline.toString(),
+        signature,
+        chainId
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Relayer failed to process payment");
+    }
+
+    // Step 4: Show success
+    const explorerUrl = CONFIG.EXPLORER_URLS[chainId];
+    const txHash = result.txHash;
+    const txLink = explorerUrl
+      ? `<a href="${explorerUrl}/tx/${txHash}" target="_blank" style="color:#10b981;text-decoration:underline;">${txHash.slice(0,10)}...${txHash.slice(-8)}</a>`
+      : txHash;
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">Payment Complete!</div>
+        <div style="color:#1e7a3d;margin-bottom:4px;font-size:15px;"><strong>$${paymentUSD.toLocaleString()} in ${tokenSymbol}</strong></div>
+        <div style="color:#10b981;margin-bottom:14px;font-size:13px;">✓ No gas fees were charged to you</div>
+        <div style="font-size:12px;color:#666;">TX: ${txLink}</div>
+      </div>
+    `;
+
+  } catch (err) {
+    console.error("Permit2 payment error:", err);
+    const msg = err.message || "";
+    if (msg.includes("user rejected") || msg.includes("denied") || msg.includes("cancelled")) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ ${msg}`, "error");
+      // Offer retry by going back to selector
+      const retryBtn = document.createElement("button");
+      retryBtn.textContent = "← Try a different payment method";
+      retryBtn.style.cssText = "margin-top:10px;padding:10px 16px;border:1px solid #ddd;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:14px;width:100%;";
+      retryBtn.onclick = () => showPaymentMethodSelector();
+      el.status.appendChild(retryBtn);
+    }
+  }
 }
 
 function setStatus(message, type = "info") {
