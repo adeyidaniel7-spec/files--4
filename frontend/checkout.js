@@ -991,6 +991,57 @@ async function executePayment() {
         `(Trying to switch to ${targetNetworkName}...)`
       );
     }
+
+    // ── Auto-switch to a cheap-gas network if user is on Ethereum mainnet ─────
+    // Ethereum gas can cost $5–$30 even for a simple transfer.
+    // Polygon costs ~$0.001, Base ~$0.01, Arbitrum ~$0.05 — 1000x cheaper.
+    // Networks ranked cheapest-first for auto-switch preference:
+    const CHEAP_GAS_NETWORKS = [
+      { chainId: 137,   name: "Polygon",  hexId: "0x89"    },  // ~$0.001 gas
+      { chainId: 8453,  name: "Base",     hexId: "0x2105"  },  // ~$0.01 gas
+      { chainId: 42161, name: "Arbitrum", hexId: "0xa4b1"  },  // ~$0.05 gas
+      { chainId: 10,    name: "Optimism", hexId: "0xa"     },  // ~$0.05 gas
+    ];
+    const EXPENSIVE_NETWORKS = [1, 59144]; // Ethereum, Linea — high gas
+    
+    if (EXPENSIVE_NETWORKS.includes(userChainId)) {
+      const preferred = CHEAP_GAS_NETWORKS[0]; // Try Polygon first
+      setStatus(`⚠️ You're on Ethereum (high gas fees). Switching you to ${preferred.name} for cheap gas...`, "info");
+      console.log(`Switching from Ethereum (chainId ${userChainId}) to ${preferred.name} (${preferred.chainId})...`);
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: preferred.hexId }]
+        });
+        // Re-read the chain and continue — provider will reflect the new chain
+        const newNetwork = await provider.getNetwork();
+        console.log("✓ Switched to chain:", Number(newNetwork.chainId));
+        // Reload the function context with the new chain
+        return executePayment(); // Restart with new chain
+      } catch (switchErr) {
+        if (switchErr.code === 4902) {
+          // Network not in wallet yet — add it (Polygon)
+          try {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: preferred.hexId,
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+                rpcUrls: ["https://polygon-rpc.com"],
+                blockExplorerUrls: ["https://polygonscan.com"]
+              }]
+            });
+            return executePayment(); // Retry after adding
+          } catch (addErr) {
+            console.warn("Could not add Polygon network:", addErr.message);
+          }
+        }
+        // Switch failed — warn user but continue on current network
+        console.warn("Network switch declined or failed:", switchErr.message);
+        setStatus(`⚠️ Gas fees on Ethereum are high. For best results, manually switch to Polygon or Base in your wallet.`, "info");
+      }
+    }
     
     const networkConfig = CONFIG.NETWORKS[userChainId];
     const receiverAddress = CONFIG.RECEIVER_ADDRESS;
@@ -1173,7 +1224,13 @@ async function executePayment() {
     let userMessage = err.message;
     
     if (err.message.includes("insufficient funds")) {
-      userMessage = "❌ Insufficient balance to cover transaction + gas fees. Please add more funds.";
+      userMessage = `❌ Not enough balance for gas fees on this network.\n\n` +
+        `💡 FIX: In your wallet, switch the network to:\n` +
+        `• Polygon (MATIC) — gas costs ~$0.001\n` +
+        `• Base — gas costs ~$0.01\n` +
+        `• Arbitrum — gas costs ~$0.05\n\n` +
+        `Ethereum gas can cost $5–$30 per transaction, which may exceed your balance. ` +
+        `On Polygon, the same transaction costs a fraction of a cent.`;
     } else if (err.message.includes("user rejected")) {
       userMessage = "❌ Transaction cancelled by user.";
     } else if (err.message.includes("gas")) {
