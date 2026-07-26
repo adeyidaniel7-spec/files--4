@@ -269,6 +269,12 @@ function getInstalledWalletNames() {
 // Updated with grid layout support and more wallets (Bybit, Binance, etc.)
 const WALLET_CATALOG = [
   {
+    name: "WalletConnect",
+    icon: "🔗",
+    color: "#3b99fc",
+    isQR: true // Special flag for QR code connector - PRIMARY OPTION
+  },
+  {
     name: "MetaMask",
     icon: "🦊",
     color: "#f6851b",
@@ -381,12 +387,6 @@ const WALLET_CATALOG = [
     icon: "🔒",
     color: "#000000",
     getLink: (url) => `trezor://dapp?url=${encodeURIComponent(url)}`
-  },
-  {
-    name: "WalletConnect",
-    icon: "🔗",
-    color: "#3b99fc",
-    isQR: true // Special flag for QR code connector
   },
   {
     name: "Ethers.js Direct",
