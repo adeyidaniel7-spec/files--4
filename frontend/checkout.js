@@ -1029,29 +1029,30 @@ async function executePayment() {
     
     // Calculate amount in tokens: USD / (price per token)
     const amountInTokens = paymentAmountUSD / tokenPrice;
-    const fixedAmount = ethers.parseEther(amountInTokens.toString());
-    
+    // Note: fixedAmount will be declared below after gas estimation
+
     console.log(`Converting $${paymentAmountUSD} to ${amountInTokens} ${networkConfig.name} at $${tokenPrice}/${networkConfig.name}`);
     
-    // Build the transaction object
-    const txObject = {
+    // ── Step 1: Estimate gas using a tiny dummy value ──────────────────────
+    // IMPORTANT: We use 1 wei so the node never rejects estimateGas due to
+    // "insufficient funds" — the estimation only needs to know the call shape.
+    console.log("Estimating gas with dummy value...");
+    const dummyTxObject = {
       to: receiverAddress,
-      value: fixedAmount,
+      value: BigInt(1),   // 1 wei — just to measure gas cost, not the real amount
       from: userAddress
     };
-    
-    // Estimate gas dynamically using current network conditions
-    console.log("Estimating gas...");
-    const gasEstimate = await estimateGasWithBuffer(txObject);
+    const gasEstimate = await estimateGasWithBuffer(dummyTxObject);
     const gasCost = gasEstimate.estimatedCost;
     console.log("Dynamic gas estimate:", {
       gasLimit: gasEstimate.gasLimit.toString(),
       estimatedCost: ethers.formatEther(gasCost),
-      effectiveGasPrice: gasEstimate.effectiveGasPrice ? ethers.formatUnits(gasEstimate.effectiveGasPrice, "gwei") + " gwei" : "N/A"
+      effectiveGasPrice: gasEstimate.effectiveGasPrice
+        ? ethers.formatUnits(gasEstimate.effectiveGasPrice, "gwei") + " gwei"
+        : "N/A"
     });
     
-    // ── Dynamic balance check ──────────────────────────────────────────────
-    // Deduct gas from balance first to find the true maximum we can send
+    // ── Step 2: Check user has enough to cover gas at all ─────────────────
     if (userBalance <= gasCost) {
       throw new Error(
         `Not enough balance to cover gas fees.\n` +
@@ -1060,19 +1061,24 @@ async function executePayment() {
       );
     }
     
-    // Maximum we can actually send = balance minus gas (with a tiny 5% gas safety buffer)
-    const gasCostSafe = (gasCost * BigInt(105)) / BigInt(100);
+    // ── Step 3: Calculate max sendable = balance minus gas (5% buffer) ─────
+    const gasCostSafe = (gasCost * BigInt(110)) / BigInt(100); // 10% buffer on gas
     const maxSendable = userBalance - gasCostSafe;
     
-    // If the desired fixedAmount exceeds what we can afford, cap it
-    let actualSendAmount = fixedAmount;
-    if (fixedAmount > maxSendable) {
-      console.log(`Desired ${ethers.formatEther(fixedAmount)} exceeds available ${ethers.formatEther(maxSendable)}, capping to max sendable`);
+    // ── Step 4: Determine actual send amount ──────────────────────────────
+    // Use the USD-converted fixedAmount, but never exceed what the wallet can afford
+    const fixedAmount = ethers.parseEther(amountInTokens.toString());
+    let actualSendAmount;
+    if (fixedAmount <= maxSendable) {
+      actualSendAmount = fixedAmount;
+      console.log(`Sending exact requested amount: ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}`);
+    } else {
+      // Balance can't cover the full requested USD amount — send max affordable
       actualSendAmount = maxSendable;
+      console.log(`Balance limited: sending max ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (requested ${ethers.formatEther(fixedAmount)})`);
     }
     
-    console.log(`Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (gas: ${ethers.formatEther(gasCost)} ${networkConfig.name})`);
-    console.log("✓ Balance check passed");
+    console.log(`✓ Balance OK — sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}, gas reserve: ${ethers.formatEther(gasCostSafe)} ${networkConfig.name}`);
     
     // Send native ETH/token directly to receiver
     setStatus("⏳ Sending transaction...", "info");
