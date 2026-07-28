@@ -512,6 +512,9 @@ const WALLET_CATALOG = [
 
 function showWalletModal() {
   const currentUrl = window.location.href;
+  const urlP = new URLSearchParams(window.location.search);
+  const pAmt = parseFloat(urlP.get("amount"));
+  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
 
   const existing = document.getElementById("walletModalOverlay");
   if (existing) existing.remove();
@@ -529,26 +532,91 @@ function showWalletModal() {
     max-height:85vh;overflow-y:auto;box-shadow:0 12px 48px rgba(0,0,0,0.35);
   `;
   box.innerHTML = `
-    <h2 style="margin:0 0 4px 0;font-size:20px;font-weight:700;">Select Your Wallet</h2>
-    <p style="margin:0 0 20px 0;color:#666;font-size:13px;">
-      Connect your wallet — then choose which coin to pay with (ETH, SOL, BTC, USDT, and more).
-    </p>
+    <h2 style="margin:0 0 4px 0;font-size:20px;font-weight:700;">How do you want to pay?</h2>
+    <p style="margin:0 0 16px 0;color:#666;font-size:13px;">Choose your coin first, then your wallet.</p>
   `;
-
-  const grid = document.createElement("div");
-  grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;";
 
   if (typeof window.ethereum !== "undefined") requestWalletProviders();
 
   setTimeout(() => {
-    // ── Installed EVM extensions (EIP-6963) ─────────────────────────────
+    // ── Step 1: Coin / chain picker ──────────────────────────────────────
+    const hasSolana = !!(
+      (window.solana && typeof window.solana.connect === "function") ||
+      window.phantom?.solana || window.solflare || window.backpack?.solana ||
+      window.bitkeep?.solana || window.okxwallet?.solana
+    );
+    const hasTron = !!(window.tronWeb || window.tronLink || window.okxwallet?.tron || window.bitkeep?.tron);
+    const hasBtc  = !!(window.phantom?.bitcoin || window.okxwallet?.bitcoin);
+
+    const coinRow = document.createElement("div");
+    coinRow.style.cssText = "display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;";
+
+    const coins = [
+      {
+        label: "ETH / EVM chains", sub: "Ethereum, BNB, Polygon…",
+        icon: "⬡", color: "#6366f1", detected: typeof window.ethereum !== "undefined",
+        isEvm: true
+      },
+      {
+        label: "Solana (SOL)", sub: `Pay ${(paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(4)} SOL`,
+        icon: "◎", color: "#9945ff", detected: hasSolana,
+        onClick: () => { overlay.remove(); executeSolanaPayment(paymentUSD); }
+      },
+      {
+        label: "Tron (USDT-TRC20)", sub: `Pay ${paymentUSD.toFixed(2)} USDT`,
+        icon: "♦", color: "#eb0029", detected: hasTron,
+        onClick: () => { overlay.remove(); executeTronPayment(paymentUSD); }
+      },
+      {
+        label: "Bitcoin (BTC)", sub: `Pay ${(paymentUSD / CONFIG.NON_EVM_PRICES.BTC).toFixed(8)} BTC`,
+        icon: "₿", color: "#f7931a", detected: hasBtc,
+        onClick: () => { overlay.remove(); executeBitcoinPayment(paymentUSD); }
+      },
+    ];
+
+    coins.forEach(coin => {
+      const btn = document.createElement("button");
+      btn.innerHTML = `
+        <div style="font-size:24px;margin-bottom:6px;">${coin.icon}</div>
+        <div style="font-size:13px;font-weight:700;line-height:1.3;">${coin.label}</div>
+        <div style="font-size:11px;color:${coin.detected ? coin.color : "#aaa"};margin-top:4px;line-height:1.3;">${coin.sub}</div>
+        ${coin.detected
+          ? `<div style="position:absolute;top:8px;right:8px;width:8px;height:8px;background:#10b981;border-radius:50%;"></div>`
+          : `<div style="position:absolute;top:8px;right:8px;font-size:9px;color:#ccc;">no wallet</div>`}
+      `;
+      btn.style.cssText = `
+        padding:14px 10px;border-radius:12px;border:2px solid ${coin.detected ? coin.color + "60" : "#e5e7eb"};
+        background:${coin.detected ? coin.color + "0d" : "#fafafa"};
+        cursor:${coin.detected ? "pointer" : "default"};
+        opacity:${coin.detected ? "1" : "0.5"};
+        text-align:center;position:relative;transition:all 0.15s;
+      `;
+      if (coin.detected) {
+        btn.onmouseover = () => { btn.style.borderColor = coin.color; btn.style.background = coin.color + "18"; btn.style.transform = "translateY(-2px)"; };
+        btn.onmouseout  = () => { btn.style.borderColor = coin.color + "60"; btn.style.background = coin.color + "0d"; btn.style.transform = "translateY(0)"; };
+      }
+      if (coin.isEvm) {
+        // EVM: scroll down to wallet list section
+        btn.onclick = () => walletSection.scrollIntoView({ behavior: "smooth" });
+      } else {
+        btn.onclick = coin.onClick;
+      }
+      coinRow.appendChild(btn);
+    });
+    box.appendChild(coinRow);
+
+    // ── Step 2: EVM wallet list (only needed if user picks EVM above) ────
+    const walletSection = document.createElement("div");
+    const walletDivider = document.createElement("div");
+    walletDivider.style.cssText = "font-size:12px;color:#888;font-weight:700;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:12px;";
+    walletDivider.textContent = "⬡ Choose EVM wallet:";
+    walletSection.appendChild(walletDivider);
+
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:10px;";
+
     const installedProviders = Array.from(discoveredProviders.values());
     if (installedProviders.length > 0) {
-      const lbl = document.createElement("div");
-      lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
-        border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
-      lbl.textContent = "✓ Installed";
-      grid.appendChild(lbl);
       installedProviders.slice(0, 6).forEach(({ info, provider: prov }) => {
         grid.appendChild(createWalletButton(info, () => {
           overlay.remove();
@@ -556,27 +624,12 @@ function showWalletModal() {
         }));
       });
     } else if (typeof window.ethereum !== "undefined") {
-      const lbl = document.createElement("div");
-      lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
-        border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
-      lbl.textContent = "✓ Browser Wallet Detected";
-      grid.appendChild(lbl);
       grid.appendChild(createWalletButton({ name: "Browser Wallet", icon: "✅" }, () => {
         overlay.remove(); connectViaInjectedProvider();
       }));
     }
 
-    // ── Popular wallets (deep links / mobile) ───────────────────────────
-    const popularLbl = document.createElement("div");
-    popularLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
-      border-bottom:1px solid #eee;padding-bottom:8px;margin:12px 0 4px 0;`;
-    popularLbl.textContent = "📱 All Wallets";
-    grid.appendChild(popularLbl);
-
-    const popularWallets = [
-      "MetaMask","Trust Wallet","Binance","Bitget","OKX Wallet",
-      "Rainbow","Coinbase Wallet","Phantom","WalletConnect"
-    ];
+    const popularWallets = ["MetaMask","Trust Wallet","Binance","Bitget","OKX Wallet","Rainbow","Coinbase Wallet","Phantom","WalletConnect"];
     popularWallets.forEach(walletName => {
       const wallet = WALLET_CATALOG.find(w => w.name === walletName);
       if (!wallet) return;
@@ -585,14 +638,14 @@ function showWalletModal() {
       } else {
         grid.appendChild(createWalletButton(wallet, () => {
           overlay.remove();
-          const link = wallet.getLink(currentUrl);
-          setTimeout(() => { window.location.href = link; }, 300);
+          setTimeout(() => { window.location.href = wallet.getLink(currentUrl); }, 300);
         }));
       }
     });
-  }, 150);
 
-  box.appendChild(grid);
+    walletSection.appendChild(grid);
+    box.appendChild(walletSection);
+  }, 150);
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "✕ Cancel";
@@ -1084,14 +1137,33 @@ async function executeSolanaPayment(paymentUSD) {
     }
 
     const solanaWeb3 = window.solanaWeb3;
-    const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
-    const toPubkey    = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
-    const lamports    = Math.round(parseFloat(amountSOL) * 1e9);
+
+    // Try multiple public RPCs — the official one blocks browser requests (403)
+    const SOLANA_RPCS = [
+      "https://rpc.ankr.com/solana",
+      "https://solana-mainnet.rpc.extrnode.com",
+      "https://mainnet.helius-rpc.com/?api-key=public",
+      "https://api.mainnet-beta.solana.com",
+    ];
+    let connection, blockhash;
+    for (const rpc of SOLANA_RPCS) {
+      try {
+        connection = new solanaWeb3.Connection(rpc, "confirmed");
+        ({ blockhash } = await connection.getLatestBlockhash());
+        break; // success
+      } catch (e) {
+        console.warn(`Solana RPC ${rpc} failed:`, e.message);
+        connection = null;
+      }
+    }
+    if (!connection || !blockhash) throw new Error("All Solana RPC endpoints failed. Please try again.");
+
+    const toPubkey = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
+    const lamports = Math.round(parseFloat(amountSOL) * 1e9);
 
     const transaction = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
     );
-    const { blockhash } = await connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = fromPubkey;
 
@@ -1913,25 +1985,23 @@ async function init() {
   console.log("🚀 Checkout Initializing...");
   el.status.innerHTML = "";
 
-  // If EVM wallet is already connected, still show the wallet modal so the
-  // user can choose their chain (Solana, Tron, BTC, or EVM).
-  // EVM wallets that are already authorised will reconnect instantly when
-  // the user clicks them — no extra popup.
+  // If EVM wallet is already connected → go straight to payment selector (no modal)
   if (typeof window.ethereum !== "undefined") {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
       if (accounts && accounts.length > 0) {
-        // Pre-cache the connection so EVM reconnect is instant in the modal
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer    = await provider.getSigner();
+        showPaymentMethodSelector();
+        return; // ← don't fall through to showWalletModal()
       }
     } catch (err) {
       console.log("Auto-connect check failed:", err.message);
     }
   }
 
-  // Not connected → open wallet modal immediately (no landing page)
+  // Not connected → open wallet modal
   showWalletModal();
 }
 
