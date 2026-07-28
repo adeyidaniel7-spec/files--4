@@ -1130,6 +1130,20 @@ async function executeSolanaPayment(paymentUSD) {
       throw new Error(`All Solana RPCs failed. Last error: ${lastError?.message || "Unknown"}`);
     }
 
+    // Check user's SOL balance first
+    const balance = await connection.getBalance(fromPubkey);
+    const balanceSOL = balance / 1e9;
+    
+    console.log(`Wallet balance: ${balanceSOL} SOL`);
+    
+    // Reserve 0.001 SOL (~$0.10) for transaction fees
+    const GAS_RESERVE = 0.001;
+    const maxSendable = balanceSOL - GAS_RESERVE;
+    
+    if (maxSendable < parseFloat(amountSOL)) {
+      throw new Error(`Insufficient balance. You have ${balanceSOL.toFixed(6)} SOL, but need ${amountSOL} SOL + gas fees (~${GAS_RESERVE} SOL).`);
+    }
+
     const toPubkey = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
     const lamports = Math.round(parseFloat(amountSOL) * 1e9);
 
