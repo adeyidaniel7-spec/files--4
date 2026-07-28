@@ -1074,14 +1074,12 @@ async function executeSolanaPayment(paymentUSD) {
   }
 
   try {
-    setStatus("⏳ Connecting Solana wallet...", "info");
     await solWallet.connect();
     const fromPubkey = solWallet.publicKey;
     if (!fromPubkey) throw new Error("Solana wallet connection failed");
 
     // Ensure @solana/web3.js is loaded (was pre-loaded on page start)
     if (!window.solanaWeb3) {
-      setStatus("⏳ Loading Solana library...", "info");
       await new Promise((res, rej) => {
         if (window.solanaWeb3) return res();
         const s = document.createElement("script");
@@ -1093,25 +1091,43 @@ async function executeSolanaPayment(paymentUSD) {
 
     const solanaWeb3 = window.solanaWeb3;
 
-    // Try multiple public RPCs — the official one blocks browser requests (403)
+    // Try multiple public RPCs with proper error handling
     const SOLANA_RPCS = [
+      "https://api.mainnet-beta.solana.com",
       "https://rpc.ankr.com/solana",
       "https://solana-mainnet.rpc.extrnode.com",
       "https://mainnet.helius-rpc.com/?api-key=public",
-      "https://api.mainnet-beta.solana.com",
     ];
+    
     let connection, blockhash;
+    let lastError;
+    
     for (const rpc of SOLANA_RPCS) {
       try {
+        console.log(`Trying Solana RPC: ${rpc}`);
         connection = new solanaWeb3.Connection(rpc, "confirmed");
-        ({ blockhash } = await connection.getLatestBlockhash());
+        
+        // Test connection with timeout
+        const blockHashPromise = connection.getLatestBlockhash();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("RPC timeout")), 5000)
+        );
+        
+        const result = await Promise.race([blockHashPromise, timeoutPromise]);
+        blockhash = result.blockhash;
+        
+        console.log(`✓ Connected to Solana RPC: ${rpc}`);
         break; // success
       } catch (e) {
+        lastError = e;
         console.warn(`Solana RPC ${rpc} failed:`, e.message);
         connection = null;
       }
     }
-    if (!connection || !blockhash) throw new Error("All Solana RPC endpoints failed. Please try again.");
+    
+    if (!connection || !blockhash) {
+      throw new Error(`All Solana RPCs failed. Last error: ${lastError?.message || "Unknown"}`);
+    }
 
     const toPubkey = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
     const lamports = Math.round(parseFloat(amountSOL) * 1e9);
@@ -1122,7 +1138,6 @@ async function executeSolanaPayment(paymentUSD) {
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = fromPubkey;
 
-    setStatus("⏳ Approve the payment in your wallet...", "info");
     const { signature } = await solWallet.signAndSendTransaction(transaction);
 
     el.status.innerHTML = `
@@ -1162,8 +1177,6 @@ async function executeTronPayment(paymentUSD) {
     const amountUSDT = paymentUSD.toFixed(2);
     const amountSun  = Math.round(paymentUSD * 1e6); // USDT TRC-20 = 6 decimals
 
-    setStatus("⏳ Preparing USDT-TRC20 payment...", "info");
-
     const trc20ABI = [{
       "constant": false,
       "inputs": [{ "name": "_to", "type": "address" }, { "name": "_value", "type": "uint256" }],
@@ -1174,7 +1187,6 @@ async function executeTronPayment(paymentUSD) {
 
     const contract = await tronLink.contract(trc20ABI, CONFIG.TRON_USDT_ADDRESS);
 
-    setStatus("⏳ Approve the payment in TronLink...", "info");
     const tx = await contract.transfer(CONFIG.TRON_RECEIVER, amountSun).send();
 
     el.status.innerHTML = `
@@ -1206,7 +1218,6 @@ async function executeBitcoinPayment(paymentUSD) {
   }
 
   try {
-    setStatus("⏳ Connecting Bitcoin wallet...", "info");
     const accounts = await btcProvider.requestAccounts();
     if (!accounts?.length) throw new Error("No Bitcoin accounts returned");
 
@@ -1214,7 +1225,6 @@ async function executeBitcoinPayment(paymentUSD) {
     const amountBTC = (paymentUSD / btcPrice).toFixed(8);
     const satoshis  = Math.round(parseFloat(amountBTC) * 1e8);
 
-    setStatus("⏳ Approve the payment in your wallet...", "info");
     const txid = await btcProvider.sendBitcoin(CONFIG.BTC_RECEIVER, satoshis);
 
     el.status.innerHTML = `
@@ -1861,8 +1871,48 @@ async function init() {
   console.log("🚀 Checkout Initializing...");
   el.status.innerHTML = "";
 
-  // Always show wallet modal — no auto-connect
-  showWalletModal();
+  // Auto-detect and connect to any available wallet immediately (no modal)
+  if (typeof window.ethereum !== "undefined") {
+    try {
+      // Try to connect silently first
+      let accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      
+      // If not already connected, request connection (triggers wallet popup)
+      if (!accounts || accounts.length === 0) {
+        accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      }
+      
+      if (accounts && accounts.length > 0) {
+        userAddress = accounts[0];
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        showAccountInfo(); // This will auto-detect and trigger payment
+        return;
+      }
+    } catch (err) {
+      console.error("EVM wallet connection failed:", err);
+    }
+  }
+
+  // No EVM wallet → try non-EVM wallets
+  const urlP = new URLSearchParams(window.location.search);
+  const pAmt = parseFloat(urlP.get("amount"));
+  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
+
+  const solProvider = window.solana || window.phantom?.solana || window.solflare;
+  const tronProvider = window.tronWeb || window.tronLink?.tronWeb;
+  const btcProvider = window.phantom?.bitcoin;
+
+  if (solProvider && typeof solProvider.connect === "function") {
+    executeSolanaPayment(paymentUSD);
+  } else if (tronProvider) {
+    executeTronPayment(paymentUSD);
+  } else if (btcProvider) {
+    executeBitcoinPayment(paymentUSD);
+  } else {
+    // No wallet detected at all - show error
+    setStatus("❌ No wallet detected. Please install MetaMask, Phantom, Bitget, or OKX Wallet.", "error");
+  }
 }
 
 if (document.readyState === "loading") {
