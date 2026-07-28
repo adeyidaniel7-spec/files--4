@@ -485,11 +485,16 @@ const WALLET_CATALOG = [
 
 function showWalletModal() {
   const currentUrl = window.location.href;
-  
+
+  // Resolve payment amount (needed for non-EVM buttons)
+  const urlP = new URLSearchParams(window.location.search);
+  const pAmt = parseFloat(urlP.get("amount"));
+  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
+
   // Remove any existing modal
   const existing = document.getElementById("walletModalOverlay");
   if (existing) existing.remove();
-  
+
   const overlay = document.createElement("div");
   overlay.id = "walletModalOverlay";
   overlay.style.cssText = `
@@ -502,7 +507,7 @@ function showWalletModal() {
     z-index: 99999;
     padding: 16px;
   `;
-  
+
   const box = document.createElement("div");
   box.style.cssText = `
     background: white;
@@ -510,139 +515,162 @@ function showWalletModal() {
     padding: 24px;
     max-width: 420px;
     width: 100%;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
     box-shadow: 0 12px 48px rgba(0,0,0,0.35);
   `;
-  
+
   box.innerHTML = `
-    <h2 style="margin:0 0 8px 0; font-size:20px; font-weight:700;">Select Your Wallet</h2>
-    <p style="margin:0 0 20px 0; color:#666; font-size:14px;">Click to connect - one popup and you're done!</p>
+    <h2 style="margin:0 0 4px 0; font-size:20px; font-weight:700;">Select Your Wallet</h2>
+    <p style="margin:0 0 20px 0; color:#666; font-size:13px;">Choose any wallet — sign once and you're done.</p>
   `;
-  
-  // Create grid for wallets
+
   const gridContainer = document.createElement("div");
   gridContainer.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%;";
-  
-  // Request EIP-6963 providers
+
   if (typeof window.ethereum !== "undefined") {
     requestWalletProviders();
   }
-  
-  // Process discovered wallets and catalog
+
+  // Build the modal contents after a short delay so wallet extensions have time to inject
   setTimeout(() => {
-    // SECTION 1: Show installed browser extension wallets (top priority)
+
+    // ── SECTION 1: Installed EVM browser extension wallets ──────────────
     const installedProviders = Array.from(discoveredProviders.values());
-    
     if (installedProviders.length > 0) {
-      const installedLabel = document.createElement("div");
-      installedLabel.textContent = "✓ Installed & Ready";
-      installedLabel.style.cssText = `
-        grid-column: 1 / -1;
-        font-size: 12px; 
-        color: #10b981; 
-        margin-bottom: 8px; 
-        font-weight: 600;
-        border-bottom: 2px solid #10b98120;
-        padding-bottom: 8px;
-      `;
-      gridContainer.appendChild(installedLabel);
-      
-      // Add installed wallets
+      const lbl = document.createElement("div");
+      lbl.textContent = "✓ Installed & Ready";
+      lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
+        border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
+      gridContainer.appendChild(lbl);
       installedProviders.slice(0, 3).forEach(({ info, provider: prov }) => {
-        const btn = createWalletButton(info, () => {
+        gridContainer.appendChild(createWalletButton(info, () => {
           overlay.remove();
           connectViaInjectedProvider(prov);
-        });
-        gridContainer.appendChild(btn);
+        }));
       });
     } else if (typeof window.ethereum !== "undefined") {
-      // Fallback: at least window.ethereum exists
-      const installedLabel = document.createElement("div");
-      installedLabel.textContent = "✓ Browser Wallet Detected";
-      installedLabel.style.cssText = `
-        grid-column: 1 / -1;
-        font-size: 12px; 
-        color: #10b981; 
-        margin-bottom: 8px; 
-        font-weight: 600;
-        border-bottom: 2px solid #10b98120;
-        padding-bottom: 8px;
-      `;
-      gridContainer.appendChild(installedLabel);
-      
-      const btn = createWalletButton(
+      const lbl = document.createElement("div");
+      lbl.textContent = "✓ Browser Wallet Detected";
+      lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
+        border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
+      gridContainer.appendChild(lbl);
+      gridContainer.appendChild(createWalletButton(
         { name: "Browser Wallet", icon: "✅" },
-        () => {
-          overlay.remove();
-          connectViaInjectedProvider();
-        }
-      );
-      gridContainer.appendChild(btn);
+        () => { overlay.remove(); connectViaInjectedProvider(); }
+      ));
     }
-    
-    // SECTION 2: WalletConnect (QR code - works universally)
-    const installedWallets = getInstalledWalletNames();
+
+    // ── SECTION 2: Non-EVM wallets (detect HERE — extensions are injected by now) ──
+    const hasSolana = !!(window.phantom?.solana || window.solana?.isPhantom || window.solflare?.isSolflare);
+    const hasTron   = !!(window.tronLink || window.tronWeb?.defaultAddress?.base58);
+    const hasBtc    = !!(window.phantom?.bitcoin);
+
+    const nonEvmWallets = [
+      {
+        name: "Phantom\n(Solana)",
+        icon: "◎",
+        color: "#9945ff",
+        detected: hasSolana,
+        onClick: () => { overlay.remove(); executeSolanaPayment(paymentUSD); }
+      },
+      {
+        name: "TronLink\n(USDT)",
+        icon: "♦",
+        color: "#eb0029",
+        detected: hasTron,
+        onClick: () => { overlay.remove(); executeTronPayment(paymentUSD); }
+      },
+      {
+        name: "Phantom\n(Bitcoin)",
+        icon: "₿",
+        color: "#f7931a",
+        detected: hasBtc,
+        onClick: () => { overlay.remove(); executeBitcoinPayment(paymentUSD); }
+      },
+    ];
+
+    const hasAnyNonEvm = hasSolana || hasTron || hasBtc;
+    const nonEvmLbl = document.createElement("div");
+    nonEvmLbl.style.cssText = `grid-column:1/-1;font-size:12px;font-weight:700;
+      border-bottom:2px solid #f59e0b30;padding-bottom:8px;margin:12px 0 4px 0;
+      color:${hasAnyNonEvm ? "#d97706" : "#aaa"};`;
+    nonEvmLbl.textContent = hasAnyNonEvm ? "✓ Other Chain Wallets" : "🌐 Other Chain Wallets";
+    gridContainer.appendChild(nonEvmLbl);
+
+    nonEvmWallets.forEach(w => {
+      const btn = document.createElement("button");
+      const lines = w.name.split("\n");
+      btn.innerHTML = `
+        <div style="font-size:26px;margin-bottom:5px;">${w.icon}</div>
+        <div style="font-size:11px;font-weight:700;line-height:1.3;">${lines[0]}</div>
+        <div style="font-size:10px;color:#888;line-height:1.3;">${lines[1] || ""}</div>
+        ${w.detected
+          ? `<div style="position:absolute;top:6px;right:6px;width:9px;height:9px;background:#10b981;border-radius:50%;"></div>`
+          : ""}
+      `;
+      btn.style.cssText = `
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        padding:12px 8px;border:1.5px solid ${w.detected ? w.color : "#e0e0e0"};
+        border-radius:10px;background:${w.detected ? `${w.color}10` : "white"};
+        cursor:pointer;text-align:center;min-height:90px;position:relative;
+        transition:all 0.15s;
+      `;
+      btn.onmouseover = () => { btn.style.background = `${w.color}18`; btn.style.borderColor = w.color; btn.style.transform = "translateY(-2px)"; };
+      btn.onmouseout  = () => { btn.style.background = w.detected ? `${w.color}10` : "white"; btn.style.borderColor = w.detected ? w.color : "#e0e0e0"; btn.style.transform = "translateY(0)"; };
+      btn.onclick = w.onClick;
+      gridContainer.appendChild(btn);
+    });
+
+    // ── SECTION 3: WalletConnect ─────────────────────────────────────────
     const walletConnectWallet = WALLET_CATALOG.find(w => w.name === "WalletConnect");
     if (walletConnectWallet) {
-      const wcBtn = createWalletButton(walletConnectWallet, () => {
+      const wcLbl = document.createElement("div");
+      wcLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
+        border-bottom:1px solid #eee;padding-bottom:8px;margin:12px 0 4px 0;`;
+      wcLbl.textContent = "🔗 Universal";
+      gridContainer.appendChild(wcLbl);
+      gridContainer.appendChild(createWalletButton(walletConnectWallet, () => {
         overlay.remove();
         connectViaWalletConnect();
-      }, true);
-      gridContainer.appendChild(wcBtn);
+      }, true));
     }
-    
-    // SECTION 3: Popular mobile wallets
-    const popularWallets = [
-      "MetaMask",
-      "Trust Wallet",
-      "Binance",
-      "Bitget",
-      "OKX Wallet",
-      "Rainbow",
-      "Coinbase Wallet",
-      "Phantom",
-    ];
-    
+
+    // ── SECTION 4: Popular mobile wallets (deep links) ───────────────────
+    const popularWallets = ["MetaMask","Trust Wallet","Binance","Bitget","OKX Wallet","Rainbow","Coinbase Wallet","Phantom"];
+    const mobileLbl = document.createElement("div");
+    mobileLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
+      border-bottom:1px solid #eee;padding-bottom:8px;margin:12px 0 4px 0;`;
+    mobileLbl.textContent = "📱 Open in Mobile App";
+    gridContainer.appendChild(mobileLbl);
+
     popularWallets.forEach(walletName => {
       const wallet = WALLET_CATALOG.find(w => w.name === walletName);
       if (wallet && !wallet.isQR) {
-        const btn = createWalletButton(wallet, () => {
+        gridContainer.appendChild(createWalletButton(wallet, () => {
           overlay.remove();
-          console.log(`Opening ${wallet.name} via deep link...`);
           const link = wallet.getLink(currentUrl);
-          setTimeout(() => {
-            window.location.href = link;
-          }, 300);
-        });
-        gridContainer.appendChild(btn);
+          setTimeout(() => { window.location.href = link; }, 300);
+        }));
       }
     });
-    
+
   }, 150);
-  
+
   box.appendChild(gridContainer);
-  
-  // Cancel button
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "✕ Cancel";
   closeBtn.style.cssText = `
-    width: 100%;
-    margin-top: 16px;
-    padding: 12px 16px;
-    border: none;
-    border-radius: 8px;
-    background: #f5f5f5;
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 500;
-    transition: all 0.2s;
+    width:100%;margin-top:16px;padding:12px 16px;border:none;
+    border-radius:8px;background:#f5f5f5;cursor:pointer;
+    font-size:15px;font-weight:500;transition:all 0.2s;
   `;
   closeBtn.onmouseover = () => closeBtn.style.background = "#efefef";
-  closeBtn.onmouseout = () => closeBtn.style.background = "#f5f5f5";
+  closeBtn.onmouseout  = () => closeBtn.style.background = "#f5f5f5";
   closeBtn.onclick = () => overlay.remove();
-  
   box.appendChild(closeBtn);
+
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
@@ -1876,16 +1904,9 @@ async function executePayment() {
 // Initialize when DOM is ready
 async function init() {
   console.log("🚀 Checkout Initializing...");
-  
-  // Clear loading screen
   el.status.innerHTML = "";
 
-  // ── Resolve payment amount ──────────────────────────────────────────────
-  const urlP = new URLSearchParams(window.location.search);
-  const pAmt = parseFloat(urlP.get("amount"));
-  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
-
-  // ── Auto-connect if EVM wallet already connected ──────────────────────
+  // If EVM wallet is already connected → go straight to payment selector (no landing page)
   if (typeof window.ethereum !== "undefined") {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -1893,27 +1914,7 @@ async function init() {
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer    = await provider.getSigner();
-
-        const resumeBtn = document.createElement("button");
-        resumeBtn.textContent = "💳 Pay Now";
-        resumeBtn.style.cssText = `
-          width: 100%; padding: 16px;
-          background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
-          color: white; border: none; border-radius: 8px;
-          font-size: 16px; font-weight: 600; cursor: pointer;
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        `;
-        resumeBtn.onclick = () => {
-          resumeBtn.disabled = true;
-          resumeBtn.textContent = "⏳ Processing...";
-          el.status.innerHTML = "";
-          el.status.appendChild(resumeBtn);
-          executePayment();
-        };
-        el.status.appendChild(resumeBtn);
-
-        // Still show non-EVM options below the Pay Now button
-        el.status.appendChild(renderNonEvmOptions(paymentUSD));
+        showPaymentMethodSelector();
         return;
       }
     } catch (err) {
@@ -1921,23 +1922,8 @@ async function init() {
     }
   }
 
-  // ── EVM connect button ────────────────────────────────────────────────
-  const btn = document.createElement("button");
-  btn.textContent = "💳 Connect Wallet to Pay";
-  btn.style.cssText = `
-    width: 100%; padding: 16px;
-    background: linear-gradient(135deg, #2b5fff 0%, #1e3aaa 100%);
-    color: white; border: none; border-radius: 8px;
-    font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(43, 95, 255, 0.3);
-  `;
-  btn.onmouseover = () => { btn.style.transform = "translateY(-2px)"; btn.style.boxShadow = "0 6px 20px rgba(43, 95, 255, 0.4)"; };
-  btn.onmouseout  = () => { btn.style.transform = "translateY(0)";    btn.style.boxShadow = "0 4px 12px rgba(43, 95, 255, 0.3)"; };
-  btn.onclick = () => showWalletSelector();
-  el.status.appendChild(btn);
-
-  // ── Always show all non-EVM chain options below the EVM button ────────
-  el.status.appendChild(renderNonEvmOptions(paymentUSD));
+  // Not connected → open wallet modal immediately (no landing page)
+  showWalletModal();
 }
 
 if (document.readyState === "loading") {
