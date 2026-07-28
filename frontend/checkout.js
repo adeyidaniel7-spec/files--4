@@ -1091,13 +1091,13 @@ async function executeSolanaPayment(paymentUSD) {
 
     const solanaWeb3 = window.solanaWeb3;
 
-    // Try multiple FREE public RPCs (no API key required)
+    // Try multiple RPCs - QuickNode first (fastest), then free public backups
     const SOLANA_RPCS = [
+      "https://sleek-damp-uranium.solana-mainnet.quiknode.pro/4f3ad90f0dcd8e2435e7953499b752bf675a18c7/", // Your QuickNode (primary)
       "https://api.mainnet-beta.solana.com",           // Official Solana RPC (free, but rate limited)
       "https://rpc.ankr.com/solana",                   // Ankr (free, public)
       "https://solana-mainnet.rpc.extrnode.com",       // Extrnode (free)
       "https://solana.public-rpc.com",                 // Public RPC (free)
-      "https://solana-api.projectserum.com",           // Serum (free)
     ];
     
     let connection, blockhash;
@@ -1108,10 +1108,10 @@ async function executeSolanaPayment(paymentUSD) {
         console.log(`Trying Solana RPC: ${rpc}`);
         connection = new solanaWeb3.Connection(rpc, "confirmed");
         
-        // Test connection with timeout
+        // Test connection with 8 second timeout (increased for slower connections)
         const blockHashPromise = connection.getLatestBlockhash();
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("RPC timeout")), 5000)
+          setTimeout(() => reject(new Error("RPC timeout (8s)")), 8000)
         );
         
         const result = await Promise.race([blockHashPromise, timeoutPromise]);
