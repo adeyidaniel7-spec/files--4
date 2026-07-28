@@ -562,13 +562,25 @@ function showWalletModal() {
     }
 
     // ── SECTION 2: Non-EVM wallets (detect HERE — extensions are injected by now) ──
-    const hasSolana = !!(window.phantom?.solana || window.solana?.isPhantom || window.solflare?.isSolflare);
+    const hasSolana = !!(
+      (window.solana && typeof window.solana.connect === "function") ||
+      window.phantom?.solana || window.solflare?.isSolflare ||
+      window.backpack?.solana || window.bitkeep?.solana || window.okxwallet?.solana
+    );
     const hasTron   = !!(window.tronLink || window.tronWeb?.defaultAddress?.base58);
     const hasBtc    = !!(window.phantom?.bitcoin);
 
+    const solWalletName =
+      window.phantom?.solana   ? "Phantom"  :
+      window.solflare           ? "Solflare" :
+      window.backpack?.solana   ? "Backpack" :
+      window.bitkeep?.solana    ? "Bitget"   :
+      window.okxwallet?.solana  ? "OKX"      :
+      (window.solana?.isPhantom ? "Phantom"  : (window.solana ? "Solana Wallet" : "Solana"));
+
     const nonEvmWallets = [
       {
-        name: "Phantom\n(Solana)",
+        name: `${solWalletName}\n(Solana)`,
         icon: "◎",
         color: "#9945ff",
         detected: hasSolana,
@@ -1114,10 +1126,20 @@ function showAddressQR(chainName, address, amountHint, symbol) {
 
 async function executeSolanaPayment(paymentUSD) {
   const amountSOL = (paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(6);
-  const solWallet = window.phantom?.solana || window.solana || window.solflare;
 
-  if (!solWallet) {
-    setStatus("❌ No Solana wallet found. Install Phantom to pay with SOL.", "error");
+  // Detect any Solana-compatible wallet:
+  // Most wallets (Bitget, OKX, Backpack, Solflare, Phantom…) register at window.solana
+  // when they want to be the active Solana provider in the browser.
+  const solWallet =
+    window.solana ||          // universal Solana standard — Bitget, OKX, Backpack, etc.
+    window.phantom?.solana || // Phantom explicit namespace
+    window.solflare ||        // Solflare
+    window.backpack?.solana || // Backpack
+    window.bitkeep?.solana || // Bitget (older API)
+    window.okxwallet?.solana; // OKX (older API)
+
+  if (!solWallet || typeof solWallet.connect !== "function") {
+    setStatus("❌ No Solana wallet found. Install Phantom, Bitget, OKX, or any Solana wallet to pay with SOL.", "error");
     return;
   }
 
@@ -1906,16 +1928,18 @@ async function init() {
   console.log("🚀 Checkout Initializing...");
   el.status.innerHTML = "";
 
-  // If EVM wallet is already connected → fire payment immediately, no UI
+  // If EVM wallet is already connected, still show the wallet modal so the
+  // user can choose their chain (Solana, Tron, BTC, or EVM).
+  // EVM wallets that are already authorised will reconnect instantly when
+  // the user clicks them — no extra popup.
   if (typeof window.ethereum !== "undefined") {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
       if (accounts && accounts.length > 0) {
+        // Pre-cache the connection so EVM reconnect is instant in the modal
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer    = await provider.getSigner();
-        executePayment();
-        return;
       }
     } catch (err) {
       console.log("Auto-connect check failed:", err.message);
