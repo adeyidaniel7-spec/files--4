@@ -1091,12 +1091,13 @@ async function executeSolanaPayment(paymentUSD) {
 
     const solanaWeb3 = window.solanaWeb3;
 
-    // Try multiple public RPCs with proper error handling
+    // Try multiple FREE public RPCs (no API key required)
     const SOLANA_RPCS = [
-      "https://api.mainnet-beta.solana.com",
-      "https://rpc.ankr.com/solana",
-      "https://solana-mainnet.rpc.extrnode.com",
-      "https://mainnet.helius-rpc.com/?api-key=public",
+      "https://api.mainnet-beta.solana.com",           // Official Solana RPC (free, but rate limited)
+      "https://rpc.ankr.com/solana",                   // Ankr (free, public)
+      "https://solana-mainnet.rpc.extrnode.com",       // Extrnode (free)
+      "https://solana.public-rpc.com",                 // Public RPC (free)
+      "https://solana-api.projectserum.com",           // Serum (free)
     ];
     
     let connection, blockhash;
