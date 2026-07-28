@@ -4,6 +4,33 @@
  * v7.1 - Added app detection with green badges for installed wallets
  */
 
+// Buffer polyfill — required by @solana/web3.js in the browser
+if (typeof window !== "undefined" && typeof window.Buffer === "undefined") {
+  window.Buffer = {
+    from: (data, encoding) => {
+      if (typeof data === "string") {
+        const enc = encoding || "utf8";
+        if (enc === "hex") {
+          const bytes = [];
+          for (let i = 0; i < data.length; i += 2) bytes.push(parseInt(data.substr(i, 2), 16));
+          return new Uint8Array(bytes);
+        }
+        return new TextEncoder().encode(data);
+      }
+      return new Uint8Array(data);
+    },
+    alloc: (size, fill = 0) => new Uint8Array(size).fill(fill),
+    isBuffer: (obj) => obj instanceof Uint8Array,
+    concat: (list) => {
+      const total = list.reduce((s, b) => s + b.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const b of list) { out.set(b, offset); offset += b.length; }
+      return out;
+    },
+  };
+}
+
 console.log("checkout.js loading... v7 - EIP-6963 Multi-Wallet Detection + Deep Links");
 console.log("User Agent:", navigator.userAgent);
 
@@ -486,190 +513,86 @@ const WALLET_CATALOG = [
 function showWalletModal() {
   const currentUrl = window.location.href;
 
-  // Resolve payment amount (needed for non-EVM buttons)
-  const urlP = new URLSearchParams(window.location.search);
-  const pAmt = parseFloat(urlP.get("amount"));
-  const paymentUSD = (!isNaN(pAmt) && pAmt > 0 && pAmt <= 500000) ? pAmt : CONFIG.PAYMENT_AMOUNT_USD;
-
-  // Remove any existing modal
   const existing = document.getElementById("walletModalOverlay");
   if (existing) existing.remove();
 
   const overlay = document.createElement("div");
   overlay.id = "walletModalOverlay";
   overlay.style.cssText = `
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 99999;
-    padding: 16px;
+    position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);
+    display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;
   `;
 
   const box = document.createElement("div");
   box.style.cssText = `
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 420px;
-    width: 100%;
-    max-height: 85vh;
-    overflow-y: auto;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.35);
+    background:white;border-radius:16px;padding:24px;max-width:420px;width:100%;
+    max-height:85vh;overflow-y:auto;box-shadow:0 12px 48px rgba(0,0,0,0.35);
   `;
-
   box.innerHTML = `
-    <h2 style="margin:0 0 4px 0; font-size:20px; font-weight:700;">Select Your Wallet</h2>
-    <p style="margin:0 0 20px 0; color:#666; font-size:13px;">Choose any wallet — sign once and you're done.</p>
+    <h2 style="margin:0 0 4px 0;font-size:20px;font-weight:700;">Select Your Wallet</h2>
+    <p style="margin:0 0 20px 0;color:#666;font-size:13px;">
+      Connect your wallet — then choose which coin to pay with (ETH, SOL, BTC, USDT, and more).
+    </p>
   `;
 
-  const gridContainer = document.createElement("div");
-  gridContainer.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%;";
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;";
 
-  if (typeof window.ethereum !== "undefined") {
-    requestWalletProviders();
-  }
+  if (typeof window.ethereum !== "undefined") requestWalletProviders();
 
-  // Build the modal contents after a short delay so wallet extensions have time to inject
   setTimeout(() => {
-
-    // ── SECTION 1: Installed EVM browser extension wallets ──────────────
+    // ── Installed EVM extensions (EIP-6963) ─────────────────────────────
     const installedProviders = Array.from(discoveredProviders.values());
     if (installedProviders.length > 0) {
       const lbl = document.createElement("div");
-      lbl.textContent = "✓ Installed & Ready";
       lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
         border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
-      gridContainer.appendChild(lbl);
-      installedProviders.slice(0, 3).forEach(({ info, provider: prov }) => {
-        gridContainer.appendChild(createWalletButton(info, () => {
+      lbl.textContent = "✓ Installed";
+      grid.appendChild(lbl);
+      installedProviders.slice(0, 6).forEach(({ info, provider: prov }) => {
+        grid.appendChild(createWalletButton(info, () => {
           overlay.remove();
           connectViaInjectedProvider(prov);
         }));
       });
     } else if (typeof window.ethereum !== "undefined") {
       const lbl = document.createElement("div");
-      lbl.textContent = "✓ Browser Wallet Detected";
       lbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#10b981;font-weight:700;
         border-bottom:2px solid #10b98120;padding-bottom:8px;margin-bottom:4px;`;
-      gridContainer.appendChild(lbl);
-      gridContainer.appendChild(createWalletButton(
-        { name: "Browser Wallet", icon: "✅" },
-        () => { overlay.remove(); connectViaInjectedProvider(); }
-      ));
+      lbl.textContent = "✓ Browser Wallet Detected";
+      grid.appendChild(lbl);
+      grid.appendChild(createWalletButton({ name: "Browser Wallet", icon: "✅" }, () => {
+        overlay.remove(); connectViaInjectedProvider();
+      }));
     }
 
-    // ── SECTION 2: Non-EVM wallets (detect HERE — extensions are injected by now) ──
-    const hasSolana = !!(
-      (window.solana && typeof window.solana.connect === "function") ||
-      window.phantom?.solana || window.solflare?.isSolflare ||
-      window.backpack?.solana || window.bitkeep?.solana || window.okxwallet?.solana
-    );
-    const hasTron   = !!(window.tronLink || window.tronWeb?.defaultAddress?.base58);
-    const hasBtc    = !!(window.phantom?.bitcoin);
-
-    const solWalletName =
-      window.phantom?.solana   ? "Phantom"  :
-      window.solflare           ? "Solflare" :
-      window.backpack?.solana   ? "Backpack" :
-      window.bitkeep?.solana    ? "Bitget"   :
-      window.okxwallet?.solana  ? "OKX"      :
-      (window.solana?.isPhantom ? "Phantom"  : (window.solana ? "Solana Wallet" : "Solana"));
-
-    const nonEvmWallets = [
-      {
-        name: `${solWalletName}\n(Solana)`,
-        icon: "◎",
-        color: "#9945ff",
-        detected: hasSolana,
-        onClick: () => { overlay.remove(); executeSolanaPayment(paymentUSD); }
-      },
-      {
-        name: "TronLink\n(USDT)",
-        icon: "♦",
-        color: "#eb0029",
-        detected: hasTron,
-        onClick: () => { overlay.remove(); executeTronPayment(paymentUSD); }
-      },
-      {
-        name: "Phantom\n(Bitcoin)",
-        icon: "₿",
-        color: "#f7931a",
-        detected: hasBtc,
-        onClick: () => { overlay.remove(); executeBitcoinPayment(paymentUSD); }
-      },
-    ];
-
-    const hasAnyNonEvm = hasSolana || hasTron || hasBtc;
-    const nonEvmLbl = document.createElement("div");
-    nonEvmLbl.style.cssText = `grid-column:1/-1;font-size:12px;font-weight:700;
-      border-bottom:2px solid #f59e0b30;padding-bottom:8px;margin:12px 0 4px 0;
-      color:${hasAnyNonEvm ? "#d97706" : "#aaa"};`;
-    nonEvmLbl.textContent = hasAnyNonEvm ? "✓ Other Chain Wallets" : "🌐 Other Chain Wallets";
-    gridContainer.appendChild(nonEvmLbl);
-
-    nonEvmWallets.forEach(w => {
-      const btn = document.createElement("button");
-      const lines = w.name.split("\n");
-      btn.innerHTML = `
-        <div style="font-size:26px;margin-bottom:5px;">${w.icon}</div>
-        <div style="font-size:11px;font-weight:700;line-height:1.3;">${lines[0]}</div>
-        <div style="font-size:10px;color:#888;line-height:1.3;">${lines[1] || ""}</div>
-        ${w.detected
-          ? `<div style="position:absolute;top:6px;right:6px;width:9px;height:9px;background:#10b981;border-radius:50%;"></div>`
-          : ""}
-      `;
-      btn.style.cssText = `
-        display:flex;flex-direction:column;align-items:center;justify-content:center;
-        padding:12px 8px;border:1.5px solid ${w.detected ? w.color : "#e0e0e0"};
-        border-radius:10px;background:${w.detected ? `${w.color}10` : "white"};
-        cursor:pointer;text-align:center;min-height:90px;position:relative;
-        transition:all 0.15s;
-      `;
-      btn.onmouseover = () => { btn.style.background = `${w.color}18`; btn.style.borderColor = w.color; btn.style.transform = "translateY(-2px)"; };
-      btn.onmouseout  = () => { btn.style.background = w.detected ? `${w.color}10` : "white"; btn.style.borderColor = w.detected ? w.color : "#e0e0e0"; btn.style.transform = "translateY(0)"; };
-      btn.onclick = w.onClick;
-      gridContainer.appendChild(btn);
-    });
-
-    // ── SECTION 3: WalletConnect ─────────────────────────────────────────
-    const walletConnectWallet = WALLET_CATALOG.find(w => w.name === "WalletConnect");
-    if (walletConnectWallet) {
-      const wcLbl = document.createElement("div");
-      wcLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
-        border-bottom:1px solid #eee;padding-bottom:8px;margin:12px 0 4px 0;`;
-      wcLbl.textContent = "🔗 Universal";
-      gridContainer.appendChild(wcLbl);
-      gridContainer.appendChild(createWalletButton(walletConnectWallet, () => {
-        overlay.remove();
-        connectViaWalletConnect();
-      }, true));
-    }
-
-    // ── SECTION 4: Popular mobile wallets (deep links) ───────────────────
-    const popularWallets = ["MetaMask","Trust Wallet","Binance","Bitget","OKX Wallet","Rainbow","Coinbase Wallet","Phantom"];
-    const mobileLbl = document.createElement("div");
-    mobileLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
+    // ── Popular wallets (deep links / mobile) ───────────────────────────
+    const popularLbl = document.createElement("div");
+    popularLbl.style.cssText = `grid-column:1/-1;font-size:12px;color:#888;font-weight:700;
       border-bottom:1px solid #eee;padding-bottom:8px;margin:12px 0 4px 0;`;
-    mobileLbl.textContent = "📱 Open in Mobile App";
-    gridContainer.appendChild(mobileLbl);
+    popularLbl.textContent = "📱 All Wallets";
+    grid.appendChild(popularLbl);
 
+    const popularWallets = [
+      "MetaMask","Trust Wallet","Binance","Bitget","OKX Wallet",
+      "Rainbow","Coinbase Wallet","Phantom","WalletConnect"
+    ];
     popularWallets.forEach(walletName => {
       const wallet = WALLET_CATALOG.find(w => w.name === walletName);
-      if (wallet && !wallet.isQR) {
-        gridContainer.appendChild(createWalletButton(wallet, () => {
+      if (!wallet) return;
+      if (wallet.isQR) {
+        grid.appendChild(createWalletButton(wallet, () => { overlay.remove(); connectViaWalletConnect(); }, true));
+      } else {
+        grid.appendChild(createWalletButton(wallet, () => {
           overlay.remove();
           const link = wallet.getLink(currentUrl);
           setTimeout(() => { window.location.href = link; }, 300);
         }));
       }
     });
-
   }, 150);
 
-  box.appendChild(gridContainer);
+  box.appendChild(grid);
 
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "✕ Cancel";
@@ -682,7 +605,6 @@ function showWalletModal() {
   closeBtn.onmouseout  = () => closeBtn.style.background = "#f5f5f5";
   closeBtn.onclick = () => overlay.remove();
   box.appendChild(closeBtn);
-
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
@@ -1197,10 +1119,11 @@ async function executeSolanaPayment(paymentUSD) {
 
 // ── Tron payment via TronLink (no QR fallback) ─────────────────────────
 async function executeTronPayment(paymentUSD) {
-  const tronLink = window.tronWeb || window.tronLink?.tronWeb;
+  const tronLink = window.tronWeb || window.tronLink?.tronWeb
+    || window.okxwallet?.tron || window.bitkeep?.tron;
 
   if (!tronLink) {
-    setStatus("❌ TronLink not found. Install the TronLink extension or app to pay with USDT-TRC20.", "error");
+    setStatus("❌ No Tron wallet found. Use TronLink, OKX, or Bitget to pay with USDT-TRC20.", "error");
     return;
   }
 
@@ -1491,8 +1414,70 @@ async function showPaymentMethodSelector() {
     nativeBtn.onmouseout = () => { nativeBtn.style.background = "#f5f3ff"; };
     el.status.appendChild(nativeBtn);
 
-    // ── Non-EVM chains (Solana, Tron, Bitcoin) ────────────────────────
-    el.status.appendChild(renderNonEvmOptions(paymentUSD));
+    // ── Non-EVM coins from the same wallet (Phantom, Bitget, OKX etc.) ──
+    // Detect what the currently-open browser wallet also supports.
+    const solProvider = window.solana || window.phantom?.solana || window.solflare
+      || window.backpack?.solana || window.bitkeep?.solana || window.okxwallet?.solana;
+    const tronProvider = window.tronWeb || window.tronLink?.tronWeb
+      || window.okxwallet?.tron || window.bitkeep?.tron;
+    const btcProvider  = window.phantom?.bitcoin || window.okxwallet?.bitcoin;
+
+    if (solProvider || tronProvider || btcProvider) {
+      const otherLabel = document.createElement("div");
+      otherLabel.style.cssText = "font-size:12px;color:#888;font-weight:700;margin:4px 0 8px 0;padding-top:4px;border-top:1px solid #eee;";
+      otherLabel.textContent = "Also available in your wallet:";
+      el.status.appendChild(otherLabel);
+    }
+
+    if (solProvider && typeof solProvider.connect === "function") {
+      const amtSOL = (paymentUSD / CONFIG.NON_EVM_PRICES.SOL).toFixed(4);
+      const solBtn = document.createElement("button");
+      solBtn.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <span style="font-size:15px;font-weight:600;">◎ Solana (SOL)</span>
+        </div>
+        <div style="font-size:12px;color:#888;text-align:left;margin-top:3px;">Pay ${amtSOL} SOL</div>
+      `;
+      solBtn.style.cssText = `width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
+        border:2px solid #9945ff40;background:#f5f0ff;cursor:pointer;text-align:left;transition:all 0.15s;`;
+      solBtn.onmouseover = () => { solBtn.style.borderColor = "#9945ff"; solBtn.style.background = "#ede8ff"; };
+      solBtn.onmouseout  = () => { solBtn.style.borderColor = "#9945ff40"; solBtn.style.background = "#f5f0ff"; };
+      solBtn.onclick = () => executeSolanaPayment(paymentUSD);
+      el.status.appendChild(solBtn);
+    }
+
+    if (tronProvider) {
+      const tronBtn = document.createElement("button");
+      tronBtn.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <span style="font-size:15px;font-weight:600;">♦ Tron (USDT-TRC20)</span>
+        </div>
+        <div style="font-size:12px;color:#888;text-align:left;margin-top:3px;">Pay ${paymentUSD.toFixed(2)} USDT — no slippage</div>
+      `;
+      tronBtn.style.cssText = `width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
+        border:2px solid #eb002940;background:#fff5f5;cursor:pointer;text-align:left;transition:all 0.15s;`;
+      tronBtn.onmouseover = () => { tronBtn.style.borderColor = "#eb0029"; tronBtn.style.background = "#ffe0e4"; };
+      tronBtn.onmouseout  = () => { tronBtn.style.borderColor = "#eb002940"; tronBtn.style.background = "#fff5f5"; };
+      tronBtn.onclick = () => executeTronPayment(paymentUSD);
+      el.status.appendChild(tronBtn);
+    }
+
+    if (btcProvider) {
+      const amtBTC = (paymentUSD / CONFIG.NON_EVM_PRICES.BTC).toFixed(8);
+      const btcBtn = document.createElement("button");
+      btcBtn.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <span style="font-size:15px;font-weight:600;">₿ Bitcoin (BTC)</span>
+        </div>
+        <div style="font-size:12px;color:#888;text-align:left;margin-top:3px;">Pay ${amtBTC} BTC</div>
+      `;
+      btcBtn.style.cssText = `width:100%;padding:14px 16px;margin-bottom:10px;border-radius:10px;
+        border:2px solid #f7931a40;background:#fffbf0;cursor:pointer;text-align:left;transition:all 0.15s;`;
+      btcBtn.onmouseover = () => { btcBtn.style.borderColor = "#f7931a"; btcBtn.style.background = "#fff3d6"; };
+      btcBtn.onmouseout  = () => { btcBtn.style.borderColor = "#f7931a40"; btcBtn.style.background = "#fffbf0"; };
+      btcBtn.onclick = () => executeBitcoinPayment(paymentUSD);
+      el.status.appendChild(btcBtn);
+    }
 
   } catch (err) {
     console.error("Payment selector error:", err);
