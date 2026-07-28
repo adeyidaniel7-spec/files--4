@@ -1606,23 +1606,14 @@ async function executePermit2Payment(tokenAddress, tokenSymbol, decimals, paymen
 }
 
 function setStatus(message, type = "info") {
+  // Minimalistic: only show errors — all ⏳ info/progress messages are silent.
+  if (type !== "error") return;
+
   const statusEl = document.createElement("div");
-  statusEl.style.padding = "12px";
-  statusEl.style.borderRadius = "8px";
-  statusEl.style.fontSize = "14px";
-  statusEl.style.marginTop = "12px";
-  
-  if (type === "error") {
-    statusEl.style.background = "#fbeceb";
-    statusEl.style.color = "#b3261e";
-  } else if (type === "success") {
-    statusEl.style.background = "#eaf6ee";
-    statusEl.style.color = "#1e7a3d";
-  } else {
-    statusEl.style.background = "#eef2ff";
-    statusEl.style.color = "#1e3ea8";
-  }
-  
+  statusEl.style.cssText = `
+    padding:12px;border-radius:8px;font-size:14px;margin-top:12px;
+    background:#fbeceb;color:#b3261e;
+  `;
   statusEl.textContent = message;
   el.status.appendChild(statusEl);
 }
