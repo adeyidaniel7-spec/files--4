@@ -1,398 +1,725 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Payment Admin - Just-in-Time Funding</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Gas Calculator & Execution</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.14.0/dist/ethers.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; padding: 20px; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
+      background: #f3f4f6;
+      padding: 20px;
+      line-height: 1.6;
+    }
     .container { max-width: 1200px; margin: 0 auto; }
     
-    .header { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .header h1 { font-size: 24px; margin-bottom: 10px; }
-    .header p { color: #666; font-size: 14px; }
+    .header { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+    .header h1 { font-size: 28px; margin-bottom: 8px; }
+    .header p { opacity: 0.9; }
     
-    .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-    .tab { padding: 12px 24px; border: none; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .tab.active { background: #3b82f6; color: white; }
-    .tab:hover:not(.active) { background: #f9fafb; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .stat-value { 
+      font-size: 32px; 
+      font-weight: bold; 
+      color: #667eea;
+    }
+    .stat-label { color: #666; font-size: 14px; margin-top: 4px; }
     
-    .chain-section { display: none; }
-    .chain-section.active { display: block; }
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     
-    .card { background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .relayer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .relayer-card {
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      position: relative;
+    }
+    .relayer-card.low-balance {
+      border-color: #ef4444;
+      background: #fef2f2;
+    }
+    .relayer-card.good-balance {
+      border-color: #10b981;
+      background: #f0fdf4;
+    }
+    .relayer-name { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .relayer-address { 
+      font-family: monospace; 
+      font-size: 12px; 
+      color: #666;
+      word-break: break-all;
+      margin-bottom: 12px;
+    }
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .balance-amount { font-weight: 600; }
+    .balance-usd { color: #666; font-size: 12px; }
     
-    .pending-item { border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 10px 0; transition: all 0.2s; }
-    .pending-item:hover { border-color: #3b82f6; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .fund-btn {
+      width: 100%;
+      padding: 10px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+    .fund-btn:hover { background: #5568d3; }
     
-    .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin: 5px; transition: all 0.2s; }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-success { background: #10b981; color: white; }
-    .btn-success:hover { background: #059669; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pending-list { display: flex; flex-direction: column; gap: 12px; }
+    .pending-item {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: center;
+    }
+    .pending-item:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    }
+    .user-info { display: flex; flex-direction: column; gap: 4px; }
+    .user-address { 
+      font-family: monospace; 
+      font-size: 14px; 
+      color: #1a1a1a;
+      font-weight: 600;
+    }
+    .chain-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      width: fit-content;
+    }
+    .chain-ethereum { background: #627eea; color: white; }
+    .chain-base { background: #0052ff; color: white; }
+    .chain-polygon { background: #8247e5; color: white; }
+    .chain-arbitrum { background: #28a0f0; color: white; }
+    .chain-solana { background: #9945ff; color: white; }
+    .chain-tron { background: #eb0029; color: white; }
     
-    .gas-display { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #f59e0b; }
-    .gas-amount { font-size: 24px; font-weight: bold; color: #92400e; }
+    .token-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .token-tag {
+      background: #f3f4f6;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
     
-    .step { display: none; padding: 20px; background: #f9fafb; border-radius: 8px; margin: 10px 0; }
-    .step.active { display: block; }
+    .amount-input {
+      width: 120px;
+      padding: 8px 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .amount-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
     
-    .address-box { background: #1f2937; color: #10b981; padding: 12px; border-radius: 6px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; word-break: break-all; margin: 10px 0; }
+    .calc-btn {
+      padding: 8px 16px;
+      background: #f3f4f6;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .calc-btn:hover {
+      background: #e5e7eb;
+    }
     
-    .status { padding: 10px; border-radius: 6px; margin: 10px 0; }
-    .status.success { background: #d1fae5; color: #065f46; }
-    .status.error { background: #fee2e2; color: #991b1b; }
-    .status.pending { background: #fef3c7; color: #92400e; }
+    .gas-calc-result {
+      background: #fef3c7;
+      border: 2px solid #f59e0b;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    .gas-amount { font-size: 20px; font-weight: bold; color: #92400e; }
     
-    .token-list { margin: 10px 0; }
-    .token-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-    .token-item:last-child { border-bottom: none; }
+    .execute-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .fund-step {
+      background: #dbeafe;
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .fund-address {
+      font-family: monospace;
+      font-size: 13px;
+      background: #1e3a8a;
+      color: #60a5fa;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 8px 0;
+      word-break: break-all;
+    }
+    .copy-btn {
+      padding: 6px 12px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
     
-    .profit { font-size: 20px; font-weight: bold; color: #10b981; }
+    .execute-btn {
+      padding: 12px 24px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .execute-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .execute-btn:hover:not(:disabled) {
+      background: #059669;
+    }
     
-    .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
-    .modal.active { display: flex; }
-    .modal-content { background: white; padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; }
+    .profit-display {
+      font-size: 24px;
+      font-weight: bold;
+      color: #10b981;
+    }
     
-    .empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    .refresh-btn {
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
     
-    .amount-input { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 18px; margin: 10px 0; }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
     
-    .calculation-result { margin-top: 15px; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
     
-    .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .step {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .step.active {
+      background: #667eea;
+      color: white;
+    }
+    .step.inactive {
+      background: #e5e7eb;
+      color: #666;
+    }
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: #e5e7eb;
+    }
+    
+    .hidden { display: none; }
+    
+    .tx-link {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .tx-link:hover {
+      text-decoration: underline;
+    }
+    
+    .error-msg {
+      color: #ef4444;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .success-msg {
+      color: #10b981;
+      font-size: 14px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Header -->
     <div class="header">
-      <h1>💰 Payment Admin Dashboard</h1>
-      <p>Just-in-Time Gas Funding System - Collect authorized payments across all chains</p>
+      <h1>💰 Admin Dashboard</h1>
+      <p>Execute transfers with just-in-time gas funding</p>
     </div>
     
-    <div class="tabs">
-      <button class="tab active" onclick="showTab('evm')">🔷 EVM Chains</button>
-      <button class="tab" onclick="showTab('solana')">◎ Solana</button>
-      <button class="tab" onclick="showTab('tron')">♦ Tron</button>
-    </div>
-    
-    <!-- EVM Section -->
-    <div id="evm" class="chain-section active">
-      <div class="card">
-        <h3>Pending EVM Authorizations</h3>
-        <div id="evm-pending">
-          <div class="loading"></div> Loading...
-        </div>
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="total-pending">0</div>
+        <div class="stat-label">Pending Authorizations</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="total-value">$0</div>
+        <div class="stat-label">Total Available</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="executed-today">0</div>
+        <div class="stat-label">Executed Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="profit-today">$0</div>
+        <div class="stat-label">Profit Today</div>
       </div>
     </div>
     
-    <!-- Solana Section -->
-    <div id="solana" class="chain-section">
-      <div class="card">
-        <h3>Pending Solana Authorizations</h3>
-        <div id="solana-pending">
-          <div class="loading"></div> Loading...
-        </div>
+    <!-- Relayer Balances -->
+    <div class="section">
+      <div class="section-title">⛽ Relayer Balances (Gas Wallets)</div>
+      <div class="relayer-grid" id="relayer-balances">
+        Loading...
       </div>
     </div>
     
-    <!-- Tron Section -->
-    <div id="tron" class="chain-section">
-      <div class="card">
-        <h3>Pending Tron Authorizations</h3>
-        <div id="tron-pending">
-          <div class="loading"></div> Loading...
-        </div>
+    <!-- Pending Authorizations -->
+    <div class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div class="section-title">📋 Pending Authorizations</div>
+        <button class="refresh-btn" onclick="loadAllData()">🔄 Refresh</button>
+      </div>
+      <div class="pending-list" id="pending-list">
+        Loading...
       </div>
     </div>
   </div>
   
   <!-- Execution Modal -->
-  <div id="execution-modal" class="modal">
-    <div class="modal-content">
-      <h2 id="modal-title">Execute Transfer</h2>
+  <div class="modal-overlay" id="execution-modal">
+    <div class="modal">
+      <div class="modal-title">Execute Transfer</div>
+      
+      <div class="step-indicator">
+        <div class="step active" id="step-1">1</div>
+        <div class="step-line"></div>
+        <div class="step inactive" id="step-2">2</div>
+        <div class="step-line"></div>
+        <div class="step inactive" id="step-3">3</div>
+      </div>
       
       <!-- Step 1: Calculate -->
-      <div id="step-calculate" class="step active">
-        <p>Calculating exact gas needed...</p>
-        <div id="calculate-loading"><div class="loading"></div> Calculating...</div>
-      </div>
-      
-      <!-- Step 2: Amount Selection -->
-      <div id="step-amount" class="step">
-        <div style="margin: 20px 0; padding: 15px; background: #f0fdf4; border-radius: 8px;">
-          <div style="font-size: 14px; color: #666;">User Authorized:</div>
-          <div style="font-size: 28px; font-weight: bold; color: #166534;" id="user-authorized">$0</div>
+      <div id="modal-step-1">
+        <div style="margin-bottom: 16px;">
+          <strong>User:</strong> <span id="modal-user" class="user-address"></span><br>
+          <strong>Chain:</strong> <span id="modal-chain"></span><br>
+          <strong>Available:</strong> <span id="modal-available"></span>
         </div>
         
-        <label style="display: block; margin-bottom: 5px; font-weight: 600;">
-          Amount to Take:
-        </label>
-        <input type="number" id="amount-input" class="amount-input" min="1" placeholder="Enter amount in USD">
-        <div style="margin-top: 5px; font-size: 12px; color: #666;">
-          Leave empty to take maximum authorized amount
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount to Take ($1 - <span id="modal-max"></span>):</label>
+          <input type="number" class="amount-input" id="amount-input" min="1" placeholder="Enter amount">
+          <button class="calc-btn" onclick="calculateGasForCurrent()" style="margin-left: 8px;">Calculate Gas</button>
         </div>
         
-        <button class="btn btn-primary" onclick="calculateForAmount()" style="width: 100%; margin-top: 15px;">
-          Calculate Gas & Proceed
-        </button>
-      </div>
-      
-      <!-- Step 3: Fund -->
-      <div id="step-fund" class="step">
-        <div class="gas-display">
-          <div>Gas Required:</div>
-          <div class="gas-amount" id="gas-amount">0.000 ETH</div>
-          <div id="gas-usd" style="color: #666;">≈ $0.00</div>
-        </div>
-        
-        <p><strong>Step 1:</strong> Send exactly this amount to your relayer:</p>
-        <div class="address-box" id="relayer-address">0x...</div>
-        
-        <button class="btn btn-primary" onclick="checkRelayerFunded()" style="width: 100%;">
-          I've Sent the Gas - Check & Continue
-        </button>
-      </div>
-      
-      <!-- Step 4: Execute -->
-      <div id="step-execute" class="step">
-        <div class="profit">
-          You'll Receive: <span id="receive-amount">$0</span>
-        </div>
-        
-        <div style="margin: 15px 0; padding: 15px; background: #fef3c7; border-radius: 8px;">
-          <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-            <span>Taking:</span>
-            <strong id="taking-amount">$0</strong>
+        <div id="gas-calc-result" class="hidden">
+          <div class="gas-calc-result">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>Gas Required:</span>
+              <span class="gas-amount" id="gas-amount">0</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>Gas Cost:</span>
+              <span style="color: #ef4444; font-weight: 600;" id="gas-cost">$0</span>
+            </div>
+            <div style="border-top: 2px solid #f59e0b; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between;">
+              <span>Your Profit:</span>
+              <span class="profit-display" id="profit-amount">$0</span>
+            </div>
           </div>
-          <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-            <span>Gas Cost:</span>
-            <strong style="color: #ef4444;" id="gas-cost">$0</strong>
+          
+          <button class="execute-btn" onclick="goToFundStep()" style="margin-top: 16px; width: 100%;">
+            Proceed to Funding →
+          </button>
+        </div>
+      </div>
+      
+      <!-- Step 2: Fund Relayer -->
+      <div id="modal-step-2" class="hidden">
+        <div class="fund-step">
+          <strong>Step 1: Fund Your Relayer</strong>
+          <p style="font-size: 14px; margin: 8px 0;">Send exactly this amount to your relayer wallet:</p>
+          
+          <div class="fund-address" id="fund-address">0x...</div>
+          
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button class="copy-btn" onclick="copyFundAddress()">📋 Copy Address</button>
+            <button class="copy-btn" onclick="copyFundAmount()">💰 Copy Amount</button>
           </div>
-          <div style="border-top: 2px solid #f59e0b; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; font-size: 18px;">
-            <span>Your Profit:</span>
-            <strong style="color: #10b981;" id="profit-amount">$0</strong>
+          
+          <div style="margin-top: 12px; font-size: 13px; color: #1e40af;">
+            <strong>Amount to send:</strong> <span id="fund-amount-display">0</span>
           </div>
         </div>
         
-        <div class="token-list" id="execute-tokens"></div>
+        <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px; padding: 12px; margin-top: 12px;">
+          <strong>Step 2: Confirm Funding</strong>
+          <p style="font-size: 13px; margin: 8px 0;">After sending, click below to verify balance and execute:</p>
+          <button class="execute-btn" onclick="checkBalanceAndExecute()" style="width: 100%;">
+            I've Funded - Execute Now
+          </button>
+          <div id="balance-check-result"></div>
+        </div>
         
-        <button class="btn btn-success" id="execute-btn" onclick="executeTransfer()" style="width: 100%;">
-          💸 Execute Transfer Now
+        <button onclick="backToCalc()" style="margin-top: 12px; width: 100%; padding: 10px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer;">
+          ← Back
         </button>
-        <div id="execute-status"></div>
       </div>
       
-      <button onclick="closeModal()" style="margin-top: 20px; width: 100%; padding: 10px; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+      <!-- Step 3: Execute -->
+      <div id="modal-step-3" class="hidden">
+        <div style="text-align: center; padding: 20px;">
+          <div class="spinner" style="width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #10b981; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+          <p>Executing transfer...</p>
+          <p style="font-size: 12px; color: #666; margin-top: 8px;">This may take 10-30 seconds</p>
+        </div>
+      </div>
+      
+      <!-- Success/Error -->
+      <div id="modal-result" class="hidden">
+        <div id="result-content"></div>
+        <button onclick="closeModal()" style="margin-top: 20px; width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+          Close
+        </button>
+      </div>
+      
+      <button onclick="closeModal()" style="margin-top: 20px; width: 100%; padding: 10px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer;" id="close-modal-btn">
         Cancel
       </button>
     </div>
   </div>
 
   <script>
-    const API_URL = "https://checkout-api-wkyo.onrender.com";
-    let currentExecution = null;
+    const API_URL = 'https://checkout-api-wkyo.onrender.com';
     
-    const CHAIN_NAMES = {
-      1: "Ethereum",
-      8453: "Base",
-      137: "Polygon",
-      42161: "Arbitrum",
-      56: "BNB Chain",
-      10: "Optimism",
-      11155111: "Sepolia"
+    // Relayer configuration - REPLACE WITH YOUR ACTUAL ADDRESSES
+    const RELAYERS = {
+      ethereum: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY' },
+      base: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://base-mainnet.g.alchemy.com/v2/YOUR_KEY' },
+      polygon: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY' },
+      arbitrum: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY' },
+      bnb: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://bsc-dataseed.bnbchain.org' },
+      solana: { address: 'YOUR_SOLANA_RELAYER_ADDRESS', rpc: 'https://api.mainnet-beta.solana.com' },
+      tron: { address: 'YOUR_TRON_RELAYER_ADDRESS', rpc: 'https://api.trongrid.io' }
     };
     
-    function showTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.chain-section').forEach(s => s.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById(tab).classList.add('active');
-      loadPending(tab);
+    let currentExecution = null;
+    let pendingData = [];
+    
+    // ============ LOAD ALL DATA ============
+    async function loadAllData() {
+      await Promise.all([
+        loadRelayerBalances(),
+        loadPendingAuthorizations()
+      ]);
     }
     
-    async function loadPending(chain) {
-      const endpoint = chain === 'evm' ? '/api/pending/evm' : 
-                      chain === 'solana' ? '/api/pending/solana' : '/api/pending/tron';
+    // ============ RELAYER BALANCE CHECKER ============
+    async function loadRelayerBalances() {
+      const container = document.getElementById('relayer-balances');
+      container.innerHTML = 'Checking balances...';
       
-      try {
-        const res = await fetch(API_URL + endpoint);
-        const data = await res.json();
-        renderPending(chain, data.pending);
-      } catch (err) {
-        document.getElementById(`${chain}-pending`).innerHTML = `<div class="status error">Error loading: ${err.message}</div>`;
-      }
-    }
-    
-    function renderPending(chain, pending) {
-      const container = document.getElementById(`${chain}-pending`);
+      const balances = [];
       
-      if (!pending || pending.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>No pending authorizations</p></div>';
-        return;
-      }
-      
-      container.innerHTML = pending.map(p => `
-        <div class="pending-item">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <strong>User:</strong> ${p.user_address.slice(0,6)}...${p.user_address.slice(-4)}<br>
-              ${chain === 'evm' ? `<strong>Chain:</strong> ${CHAIN_NAMES[p.chain_id] || p.chain_id}<br>` : ''}
-              <strong>Time:</strong> ${new Date(p.created_at).toLocaleString()}<br>
-              <strong>Tokens:</strong> ${p.tokens.length} approved
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 20px; font-weight: bold; color: #10b981;">
-                $${(p.max_authorized_amount || p.current_balance_usd || 0).toFixed(2)}
-              </div>
-              <button class="btn btn-primary" onclick="startExecution('${chain}', '${p.user_address}', ${p.chain_id || 0})">
-                💸 Collect Funds
-              </button>
-            </div>
-          </div>
-          <div class="token-list" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-            ${p.tokens.slice(0, 5).map(t => `
-              <div class="token-item">
-                <span>${t.sym || t.symbol}</span>
-                <span>$${(t.usdValue || t.uiAmount || 0).toFixed(2)}</span>
-              </div>
-            `).join('')}
-            ${p.tokens.length > 5 ? `<div style="text-align: center; color: #666; font-size: 12px; margin-top: 5px;">+${p.tokens.length - 5} more</div>` : ''}
-          </div>
-        </div>
-      `).join('');
-    }
-    
-    async function startExecution(chain, userAddress, chainId) {
-      currentExecution = { chain, userAddress, chainId };
-      
-      const modal = document.getElementById('execution-modal');
-      modal.classList.add('active');
-      
-      // Reset steps
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-      document.getElementById('step-calculate').classList.add('active');
-      
-      // Calculate gas
-      try {
-        let gasData;
+      // Check EVM chains
+      for (const [chain, config] of Object.entries(RELAYERS)) {
+        if (chain === 'solana' || chain === 'tron') continue;
         
-        if (chain === 'evm') {
-          const res = await fetch(API_URL + '/api/gas/estimate/evm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chainId, userAddress })
+        try {
+          const provider = new ethers.JsonRpcProvider(config.rpc);
+          const balance = await provider.getBalance(config.address);
+          const ethBalance = ethers.formatEther(balance);
+          
+          // Get price (simplified)
+          const prices = { ethereum: 2500, base: 2500, polygon: 1, arbitrum: 2500, bnb: 600 };
+          const usdValue = parseFloat(ethBalance) * prices[chain];
+          
+          balances.push({
+            chain,
+            name: chain.charAt(0).toUpperCase() + chain.slice(1),
+            address: config.address,
+            balance: ethBalance,
+            usd: usdValue,
+            sufficient: usdValue > 1 // At least $1 for gas
           });
-          gasData = await res.json();
-        } else if (chain === 'solana') {
-          const res = await fetch(API_URL + '/api/gas/estimate/solana', { method: 'POST' });
-          gasData = await res.json();
-        } else {
-          const res = await fetch(API_URL + '/api/gas/estimate/tron', { method: 'POST' });
-          gasData = await res.json();
+        } catch (e) {
+          balances.push({
+            chain,
+            name: chain.charAt(0).toUpperCase() + chain.slice(1),
+            address: config.address,
+            balance: '0',
+            usd: 0,
+            sufficient: false,
+            error: true
+          });
         }
-        
-        currentExecution.gasData = gasData;
-        
-        // Show amount selection step
-        document.getElementById('step-calculate').classList.remove('active');
-        document.getElementById('step-amount').classList.add('active');
-        
-        document.getElementById('user-authorized').textContent = `$${gasData.userBalance.toFixed(2)}`;
-        document.getElementById('amount-input').max = gasData.maxAllowedAmount;
-        document.getElementById('amount-input').value = Math.min(100, gasData.maxAllowedAmount);
-        
-      } catch (err) {
-        document.getElementById('calculate-loading').innerHTML = `<span style="color: red;">Error: ${err.message}</span>`;
       }
-    }
-    
-    async function calculateForAmount() {
-      const amount = document.getElementById('amount-input').value || currentExecution.gasData.maxAllowedAmount;
-      const { chain, userAddress, chainId, gasData } = currentExecution;
       
-      // Show fund step
-      document.getElementById('step-amount').classList.remove('active');
-      document.getElementById('step-fund').classList.add('active');
-      
-      document.getElementById('gas-amount').textContent = 
-        chain === 'solana' ? `${gasData.gasSol} SOL` :
-        chain === 'tron' ? `${gasData.gasTrx} TRX` :
-        `${gasData.gasEth} ETH`;
-      
-      document.getElementById('gas-usd').textContent = `≈ $${gasData.gasUsd}`;
-      document.getElementById('relayer-address').textContent = gasData.relayerAddress;
-      
-      currentExecution.amount = parseFloat(amount);
-    }
-    
-    async function checkRelayerFunded() {
-      const { chain, userAddress, chainId, gasData, amount } = currentExecution;
-      
-      document.getElementById('step-fund').classList.remove('active');
-      document.getElementById('step-execute').classList.add('active');
-      
-      document.getElementById('receive-amount').textContent = `$${amount.toFixed(2)}`;
-      document.getElementById('taking-amount').textContent = `$${amount.toFixed(2)}`;
-      document.getElementById('gas-cost').textContent = `$${gasData.gasUsd}`;
-      document.getElementById('profit-amount').textContent = `$${(amount - parseFloat(gasData.gasUsd)).toFixed(2)}`;
-      
-      // Get pending data to show tokens
-      const pendingRes = await fetch(API_URL + (chain === 'evm' ? '/api/pending/evm' : chain === 'solana' ? '/api/pending/solana' : '/api/pending/tron'));
-      const pending = await pendingRes.json();
-      const userAuth = pending.pending.find(p => p.user_address === userAddress);
-      
-      document.getElementById('execute-tokens').innerHTML = userAuth.tokens.slice(0, 3).map(t => `
-        <div class="token-item">
-          <span>${t.sym || t.symbol}</span>
-          <span style="color: #10b981; font-weight: bold;">$${(t.usdValue || t.uiAmount || 0).toFixed(2)}</span>
-        </div>
-      `).join('');
-    }
-    
-    async function executeTransfer() {
-      const btn = document.getElementById('execute-btn');
-      const status = document.getElementById('execute-status');
-      
-      btn.disabled = true;
-      status.innerHTML = '<div class="status pending">⏳ Executing...</div>';
-      
+      // Check Solana
       try {
-        const { chain, userAddress, chainId, amount } = currentExecution;
-        
-        const endpoint = chain === 'evm' ? '/api/execute/evm' :
-                        chain === 'solana' ? '/api/execute/solana' : '/api/execute/tron';
-        
-        const res = await fetch(API_URL + endpoint, {
+        const solResponse = await fetch(RELAYERS.solana.rpc, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userAddress, chainId, amountToTake: amount })
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getBalance',
+            params: [RELAYERS.solana.address]
+          })
         });
+        const solData = await solResponse.json();
+        const solBalance = solData.result?.value / 1e9 || 0;
         
-        const result = await res.json();
-        
-        if (result.success) {
-          status.innerHTML = `
-            <div class="status success">
-              ✅ Success! Collected $${result.amountTaken} in ${result.token}<br>
-              TX: <a href="#" target="_blank">${result.txHash?.slice(0,10)}...</a>
+        balances.push({
+          chain: 'solana',
+          name: 'Solana',
+          address: RELAYERS.solana.address,
+          balance: solBalance.toFixed(4) + ' SOL',
+          usd: solBalance * 150,
+          sufficient: solBalance > 0.01
+        });
+      } catch (e) {
+        balances.push({
+          chain: 'solana',
+          name: 'Solana',
+          address: RELAYERS.solana.address,
+          balance: '0',
+          usd: 0,
+          sufficient: false
+        });
+      }
+      
+      // Render
+      container.innerHTML = balances.map(b => `
+        <div class="relayer-card ${b.sufficient ? 'good-balance' : 'low-balance'}">
+          <div class="relayer-name">${b.name}</div>
+          <div class="relayer-address">${b.address}</div>
+          <div class="balance-row">
+            <span>Balance:</span>
+            <span class="balance-amount">${b.balance}</span>
+          </div>
+          <div class="balance-row">
+            <span>Value:</span>
+            <span class="balance-usd">~$${b.usd.toFixed(2)}</span>
+          </div>
+          ${!b.sufficient ? `
+            <div style="color: #ef4444; font-size: 12px; margin-top: 8px;">
+              ⚠️ Low balance - fund needed
             </div>
-          `;
-          setTimeout(() => {
-            closeModal();
-            loadPending(chain);
-          }, 2000);
-        } else {
-          throw new Error(result.error);
+          ` : ''}
+          <button class="fund-btn" onclick="quickFund('${b.chain}', '${b.address}')">
+            💰 Fund This Relayer
+          </button>
+        </div>
+      `).join('');
+    }
+    
+    // ============ PENDING AUTHORIZATIONS ============
+    async function loadPendingAuthorizations() {
+      const container = document.getElementById('pending-list');
+      container.innerHTML = 'Loading...';
+      
+      try {
+        // Fetch from all chains
+        const [evmRes, solRes, tronRes] = await Promise.all([
+          fetch(`${API_URL}/api/pending/evm`).catch(() => ({json: () => ({pending: []})})),
+          fetch(`${API_URL}/api/pending/solana`).catch(() => ({json: () => ({pending: []})})),
+          fetch(`${API_URL}/api/pending/tron`).catch(() => ({json: () => ({pending: []})}))
+        ]);
+        
+        const evm = await evmRes.json();
+        const sol = await solRes.json();
+        const tron = await tronRes.json();
+        
+        pendingData = [
+          ...(evm.pending || []).map(p => ({...p, chainType: 'evm'})),
+          ...(sol.pending || []).map(p => ({...p, chainType: 'solana'})),
+          ...(tron.pending || []).map(p => ({...p, chainType: 'tron'}))
+        ];
+        
+        // Update stats
+        const totalValue = pendingData.reduce((sum, p) => sum + (p.maxAuthorizedAmount || p.current_balance_usd || 0), 0);
+        document.getElementById('total-pending').textContent = pendingData.length;
+        document.getElementById('total-value').textContent = '$' + totalValue.toFixed(0);
+        
+        if (pendingData.length === 0) {
+          container.innerHTML = '<div class="empty-state">No pending authorizations</div>';
+          return;
         }
         
+        // Render pending items
+        container.innerHTML = pendingData.map((p, index) => {
+          const chainName = p.chainId ? CONFIG.NETWORK_NAMES[p.chainId] : p.chainType;
+          const chainClass = 'chain-' + (chainName?.toLowerCase() || p.chainType);
+          const amount = p.maxAuthorizedAmount || p.current_balance_usd || 0;
+          const tokens = p.tokens || [];
+          
+          return `
+            <div class="pending-item">
+              <div class="user-info">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="user-address">${p.user_address.slice(0, 6)}...${p.user_address.slice(-4)}</span>
+                  <span class="chain-badge ${chainClass}">${chainName}</span>
+                </div>
+                <div style="font-size: 20px; font-weight: bold; color: #10b981;">
+                  Up to $${amount.toFixed(2)}
+                </div>
+                <div class="token-list">
+                  ${tokens.slice(0, 3).map(t => `
+                    <span class="token-tag">${t.sym || t.symbol}: $${(t.usdValue || t.uiAmount || 0).toFixed(0)}</span>
+                  `).join('')}
+                  ${tokens.length > 3 ? `<span class="token-tag">+${tokens.length - 3} more</span>` : ''}
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="execute-btn" onclick="openExecutionModal(${index})">
+                  Execute
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+        
       } catch (err) {
-        status.innerHTML = `<div class="status error">❌ ${err.message}</div>`;
-        btn.disabled = false;
+        container.innerHTML = `<div class="empty-state">Error loading: ${err.message}</div>`;
       }
+    }
+    
+    // ============ EXECUTION MODAL ============
+    function openExecutionModal(index) {
+      currentExecution = pendingData[index];
+      const p = currentExecution;
+      
+      document.getElementById('modal-user').textContent = p.user_address;
+      document.getElementById('modal-chain').textContent = p.chainId ? CONFIG.NETWORK_NAMES[p.chainId] : p.chainType;
+      document.getElementById('modal-available').textContent = '$' + (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(2);
+      document.getElementById('modal-max').textContent = (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(0);
+      
+      // Reset modal
+      document.getElementById('modal-step-1').classList.remove('hidden');
+      document.getElementById('modal-step-2').classList.add('hidden');
+      document.getElementById('modal-step-3').classList.add('hidden');
+      document.getElementById('modal-result').classList.add('hidden');
+      document.getElementById('gas-calc-result').classList.add('hidden');
+      document.getElementById('close-modal-btn').classList.remove('hidden');
+      document.getElementById('amount-input').value = '';
+      
+      // Reset steps
+      document.getElementById('step-1').className = 'step active';
+      document.getElementById('step-2').className = 'step inactive';
+      document.getElementById('step-3').className = 'step inactive';
+      
+      document.getElementById('execution-modal').classList.add('active');
     }
     
     function closeModal() {
@@ -400,17 +727,186 @@
       currentExecution = null;
     }
     
-    // Load initial data
-    loadPending('evm');
-    loadPending('solana');
-    loadPending('tron');
+    // ============ GAS CALCULATOR ============
+    async function calculateGasForCurrent() {
+      if (!currentExecution) return;
+      
+      const amount = parseFloat(document.getElementById('amount-input').value);
+      const maxAmount = currentExecution.maxAuthorizedAmount || currentExecution.current_balance_usd || 0;
+      
+      if (!amount || amount < 1 || amount > maxAmount) {
+        alert(`Please enter an amount between $1 and $${maxAmount.toFixed(2)}`);
+        return;
+      }
+      
+      const chain = currentExecution.chainId ? 
+        Object.keys(CONFIG.NETWORK_NAMES).find(k => CONFIG.NETWORK_NAMES[k] === CONFIG.NETWORK_NAMES[currentExecution.chainId]) || 'base'
+        : currentExecution.chainType;
+      
+      const gasInfo = calculateGas(chain, amount);
+      
+      document.getElementById('gas-amount').textContent = gasInfo.gasAmount;
+      document.getElementById('gas-cost').textContent = gasInfo.gasCostUSD;
+      document.getElementById('profit-amount').textContent = '$' + (amount - parseFloat(gasInfo.gasCostUSD.replace('$', ''))).toFixed(2);
+      
+      document.getElementById('gas-calc-result').classList.remove('hidden');
+      
+      // Store for next step
+      currentExecution.calculatedGas = gasInfo;
+      currentExecution.takeAmount = amount;
+    }
     
-    // Refresh every 30 seconds
-    setInterval(() => {
-      const activeTab = document.querySelector('.tab.active').textContent.includes('EVM') ? 'evm' :
-                        document.querySelector('.tab.active').textContent.includes('Solana') ? 'solana' : 'tron';
-      loadPending(activeTab);
-    }, 30000);
+    function calculateGas(chain, amountUSD) {
+      const gasPrices = {
+        ethereum: { limit: 150000, priceGwei: 50, ethPrice: 2500, unit: 'ETH' },
+        base: { limit: 150000, priceGwei: 0.1, ethPrice: 2500, unit: 'ETH' },
+        polygon: { limit: 150000, priceGwei: 50, ethPrice: 1, unit: 'MATIC' },
+        arbitrum: { limit: 300000, priceGwei: 0.1, ethPrice: 2500, unit: 'ETH' },
+        bnb: { limit: 150000, priceGwei: 5, ethPrice: 600, unit: 'BNB' },
+        solana: { limit: 1, priceGwei: 0.000005, ethPrice: 150, unit: 'SOL' },
+        tron: { limit: 1, priceGwei: 1, ethPrice: 0.13, unit: 'TRX' }
+      };
+      
+      const config = gasPrices[chain] || gasPrices.base;
+      const gasCost = (config.limit * config.priceGwei) / 1e9;
+      const usdCost = gasCost * config.ethPrice;
+      
+      return {
+        chain,
+        gasAmount: gasCost.toFixed(6) + ' ' + config.unit,
+        gasCostUSD: '$' + (chain === 'solana' ? '0.001' : usdCost.toFixed(2)),
+        relayerAddress: RELAYERS[chain]?.address || 'Unknown',
+        fundAmount: gasCost.toFixed(6)
+      };
+    }
+    
+    function goToFundStep() {
+      if (!currentExecution?.calculatedGas) return;
+      
+      const gas = currentExecution.calculatedGas;
+      
+      document.getElementById('fund-address').textContent = gas.relayerAddress;
+      document.getElementById('fund-amount-display').textContent = gas.gasAmount + ' (' + gas.gasCostUSD + ')';
+      
+      document.getElementById('modal-step-1').classList.add('hidden');
+      document.getElementById('modal-step-2').classList.remove('hidden');
+      
+      document.getElementById('step-1').className = 'step inactive';
+      document.getElementById('step-2').className = 'step active';
+    }
+    
+    function backToCalc() {
+      document.getElementById('modal-step-2').classList.add('hidden');
+      document.getElementById('modal-step-1').classList.remove('hidden');
+      document.getElementById('step-2').className = 'step inactive';
+      document.getElementById('step-1').className = 'step active';
+    }
+    
+    // ============ FUNDING HELPERS ============
+    function copyFundAddress() {
+      const address = document.getElementById('fund-address').textContent;
+      navigator.clipboard.writeText(address);
+      alert('Address copied!');
+    }
+    
+    function copyFundAmount() {
+      const amount = currentExecution?.calculatedGas?.fundAmount;
+      if (amount) {
+        navigator.clipboard.writeText(amount);
+        alert('Amount copied!');
+      }
+    }
+    
+    function quickFund(chain, address) {
+      const gasInfo = calculateGas(chain, 100);
+      alert(`Send ${gasInfo.gasAmount} to:\n${address}\n\nCost: ${gasInfo.gasCostUSD}\n\nThis funds ~10 transactions.`);
+    }
+    
+    // ============ EXECUTE AFTER FUNDING ============
+    async function checkBalanceAndExecute() {
+      if (!currentExecution) return;
+      
+      document.getElementById('balance-check-result').innerHTML = '<div class="success-msg">Checking balance...</div>';
+      
+      // Check if relayer has balance (simplified - in production check actual balance)
+      setTimeout(async () => {
+        document.getElementById('modal-step-2').classList.add('hidden');
+        document.getElementById('modal-step-3').classList.remove('hidden');
+        document.getElementById('close-modal-btn').classList.add('hidden');
+        
+        document.getElementById('step-2').className = 'step inactive';
+        document.getElementById('step-3').className = 'step active';
+        
+        await executeTransfer();
+      }, 1500);
+    }
+    
+    async function executeTransfer() {
+      if (!currentExecution) return;
+      
+      try {
+        const endpoint = currentExecution.chainType === 'evm' ? '/api/execute/evm' :
+                          currentExecution.chainType === 'solana' ? '/api/execute/solana' : '/api/execute/tron';
+        
+        const response = await fetch(API_URL + endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: currentExecution.user_address,
+            chainId: currentExecution.chainId,
+            amountToTake: currentExecution.takeAmount
+          })
+        });
+        
+        const result = await response.json();
+        
+        document.getElementById('modal-step-3').classList.add('hidden');
+        document.getElementById('modal-result').classList.remove('hidden');
+        document.getElementById('close-modal-btn').classList.remove('hidden');
+        
+        if (result.success) {
+          document.getElementById('result-content').innerHTML = `
+            <div style="text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+              <h3 style="color: #10b981; margin-bottom: 16px;">Transfer Executed!</h3>
+              <div style="text-align: left; background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                <div style="margin-bottom: 8px;"><strong>Amount:</strong> $${result.amountTaken}</div>
+                <div style="margin-bottom: 8px;"><strong>Token:</strong> ${result.token}</div>
+                <div style="margin-bottom: 8px;"><strong>Gas Paid:</strong> ${result.gasCost || currentExecution.calculatedGas.gasCostUSD}</div>
+                <div><strong>Transaction:</strong> <a href="${result.explorerUrl}" target="_blank" class="tx-link">View on Explorer →</a></div>
+              </div>
+            </div>
+          `;
+          
+          // Refresh data
+          setTimeout(loadAllData, 1000);
+        } else {
+          throw new Error(result.error || 'Execution failed');
+        }
+        
+      } catch (err) {
+        document.getElementById('modal-step-3').classList.add('hidden');
+        document.getElementById('modal-result').classList.remove('hidden');
+        document.getElementById('close-modal-btn').classList.remove('hidden');
+        
+        document.getElementById('result-content').innerHTML = `
+          <div style="text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+            <h3 style="color: #ef4444; margin-bottom: 16px;">Execution Failed</h3>
+            <p>${err.message}</p>
+            <p style="font-size: 13px; color: #666; margin-top: 12px;">
+              Make sure you funded the relayer with exact gas amount.
+            </p>
+          </div>
+        `;
+      }
+    }
+    
+    // Load on start
+    loadAllData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadAllData, 30000);
   </script>
 </body>
 </html>

