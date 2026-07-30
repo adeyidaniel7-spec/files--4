@@ -13,10 +13,12 @@
     "hardhat": "^2.22.0"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.98.4",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "ethers": "^6.14.0",
+    "ethers": "^6.17.0",
     "express": "^4.22.2",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "tronweb": "^6.4.0"
   }
 }

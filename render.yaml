@@ -1,4 +1,10 @@
 services:
+  # PostgreSQL Database (Free tier)
+  - type: pserv
+    name: checkout-db
+    plan: free
+    
+  # API Backend
   - type: web
     name: checkout-api
     runtime: node
@@ -10,7 +16,59 @@ services:
         value: production
       - key: PORT
         value: 3001
+        
+      # Database (Auto-populated from PostgreSQL service above)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: checkout-db
+          property: connectionString
+      
+      # Receiver Addresses (Your wallets where funds go)
       - key: RECEIVER_ADDRESS
-        scope: project
-      - key: RELAYER_PRIVATE_KEY
-        scope: project
+        value: 0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9
+      - key: SOLANA_RECEIVER
+        value: HQbKDL2VQDWTD9rKTg5HGC9VeEpMubKeT1Lkorjr5YzR
+      - key: TRON_RECEIVER
+        value: TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT
+      
+      # EVM Relayer Keys (Same key for all chains - from generate-wallets.js)
+      - key: ETH_RELAYER_KEY
+        sync: false
+      - key: BASE_RELAYER_KEY
+        sync: false
+      - key: POLYGON_RELAYER_KEY
+        sync: false
+      - key: ARBITRUM_RELAYER_KEY
+        sync: false
+      - key: BNB_RELAYER_KEY
+        sync: false
+      - key: OPTIMISM_RELAYER_KEY
+        sync: false
+      
+      # EVM RPC URLs (Use Alchemy/Infura for production)
+      - key: ETH_RPC
+        value: https://eth.llamarpc.com
+      - key: BASE_RPC
+        value: https://mainnet.base.org
+      - key: POLYGON_RPC
+        value: https://polygon-rpc.com
+      - key: ARBITRUM_RPC
+        value: https://arb1.arbitrum.io/rpc
+      - key: BNB_RPC
+        value: https://bsc-dataseed.bnbchain.org
+      - key: OPTIMISM_RPC
+        value: https://mainnet.optimism.io
+      
+      # Solana Configuration
+      - key: SOLANA_RELAYER_PUBKEY
+        value: 8yR24zo9GeHbVCoiUjzFH283ZeYSU8Bt3WLQ6QqR3g4x
+      
+      # Tron Configuration
+      - key: TRON_RELAYER_KEY
+        sync: false
+      - key: TRON_RELAYER_ADDRESS
+        value: TJYU94egH3n8Vkox647GsnG99mri5JC3Bp
+      
+      # Admin Dashboard URL (Update after deployment)
+      - key: ADMIN_URL
+        value: https://your-admin-url.vercel.app
