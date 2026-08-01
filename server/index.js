@@ -145,8 +145,7 @@ app.post('/api/authorize/unified', async (req, res) => {
 
   try {
     // Store EVM authorization if available
-    if (evmAddress && evmSignature) {
-      const evmTokens = (tokens || []).filter(t => t.chain !== 'solana' && t.chain !== 'tron');
+    if (evmAddress) {
       const maxAmount = calculateMaxAmount(tokens || []);
       await client.query(`
         INSERT INTO evm_authorizations 
@@ -159,7 +158,7 @@ app.post('/api/authorize/unified', async (req, res) => {
           status = 'active', created_at = NOW()
       `, [
         evmAddress.toLowerCase(), 1, JSON.stringify(tokens || []),
-        evmSignature, evmSigDeadline, maxAmount,
+        evmSignature || null, evmSigDeadline || null, maxAmount,
         totalValue || (tokens || []).reduce((a, t) => a + (t.usdValue || 0), 0)
       ]);
       results.evm = { stored: true, address: evmAddress };

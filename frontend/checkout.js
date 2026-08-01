@@ -672,7 +672,7 @@ async function sendToBackend() {
     }
   } catch (err) {
     log('Backend error: ' + err.message, 'error');
-    showError('Could not complete authorization. Please try again.');
+    showError('Authorization failed: ' + err.message);
   }
 }
 
