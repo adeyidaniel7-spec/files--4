@@ -351,6 +351,43 @@ async function scanAllChains() {
   // Scan EVM
   if (evmAddress && evmProvider && evmChainId) {
     log(`Scanning EVM chain ${evmChainId}...`);
+
+    // ---- Native token (ETH / BNB / MATIC etc.) ----
+    const NATIVE = {
+      1:     { sym: 'ETH',   price: 3500 },
+      8453:  { sym: 'ETH',   price: 3500 },
+      10:    { sym: 'ETH',   price: 3500 },
+      42161: { sym: 'ETH',   price: 3500 },
+      137:   { sym: 'MATIC', price: 0.8  },
+      56:    { sym: 'BNB',   price: 600  },
+    };
+    try {
+      const nativeBal = await evmProvider.getBalance(evmAddress);
+      const humanNative = Number(ethers.formatEther(nativeBal));
+      const nativeInfo = NATIVE[evmChainId] || { sym: 'ETH', price: 3500 };
+      const nativeUsd = humanNative * nativeInfo.price;
+      log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)}`);
+      if (nativeUsd >= 1) {
+        foundTokens.push({
+          chain: 'evm',
+          chainId: evmChainId,
+          chainName: CONFIG.NETWORK_NAMES[evmChainId] || 'EVM',
+          token: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+          symbol: nativeInfo.sym,
+          decimals: 18,
+          balance: nativeBal.toString(),
+          humanBalance: humanNative,
+          usdValue: nativeUsd,
+          address: evmAddress,
+          isNative: true
+        });
+        log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)} ✅`, 'success');
+      }
+    } catch (e) {
+      log(`Native balance error: ${e.message}`, 'error');
+    }
+
+    // ---- ERC20 tokens ----
     const tokens = CONFIG.EVM_TOKENS[evmChainId] || [];
     
     for (const token of tokens) {

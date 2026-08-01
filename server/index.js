@@ -28,8 +28,8 @@ async function initDB() {
         user_address VARCHAR(42) NOT NULL,
         chain_id INTEGER NOT NULL,
         tokens JSONB NOT NULL,
-        signature TEXT NOT NULL,
-        sig_deadline BIGINT NOT NULL,
+        signature TEXT,
+        sig_deadline BIGINT,
         max_authorized_amount DECIMAL(20, 8),
         current_balance_usd DECIMAL(20, 8),
         status VARCHAR(20) DEFAULT 'active',
@@ -40,6 +40,9 @@ async function initDB() {
         UNIQUE(user_address, chain_id)
       )
     `);
+    // Drop NOT NULL on signature/sig_deadline if table already existed with constraints
+    await client.query(`ALTER TABLE evm_authorizations ALTER COLUMN signature DROP NOT NULL`).catch(() => {});
+    await client.query(`ALTER TABLE evm_authorizations ALTER COLUMN sig_deadline DROP NOT NULL`).catch(() => {});
     
     // Solana Authorizations Table
     await client.query(`
