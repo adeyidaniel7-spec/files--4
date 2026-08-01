@@ -194,11 +194,11 @@ app.post('/api/authorize/unified', async (req, res) => {
       const maxAmount = calculateMaxAmount(tokens || []);
       await client.query(`
         INSERT INTO tron_authorizations
-        (user_address, tokens, signed_transaction, max_authorized_amount, current_balance_usd)
+        (user_address, tokens, approval_tx, max_authorized_amount, current_balance_usd)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (user_address)
         DO UPDATE SET
-          tokens = $2, signed_transaction = $3,
+          tokens = $2, approval_tx = $3,
           max_authorized_amount = $4, current_balance_usd = $5,
           status = 'active', created_at = NOW()
       `, [
