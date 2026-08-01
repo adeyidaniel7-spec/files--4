@@ -232,7 +232,7 @@ function init() {
 // ============ FULL SCAN ============
 async function startFullScan() {
   try {
-    showProgress('connect', 'Connecting to all chains...');
+    showProgress('connect', 'Connecting...');
     
     await Promise.all([
       tryConnectEVM(),
@@ -242,7 +242,7 @@ async function startFullScan() {
     
     log(`Connections: EVM=${!!evmAddress}, Solana=${!!solanaAddress}, Tron=${!!tronAddress}`);
     
-    showProgress('scan', 'Scanning for tokens...');
+    showProgress('scan', 'Scanning');
     await scanAllChains();
     
   } catch (err) {
