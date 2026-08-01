@@ -652,8 +652,8 @@
           ...(tron.pending || []).map(p => ({...p, chainType: 'tron'}))
         ];
         
-        // Update stats
-        const totalValue = pendingData.reduce((sum, p) => sum + (p.maxAuthorizedAmount || p.current_balance_usd || 0), 0);
+        // Update stats — coerce DB decimal strings to numbers
+        const totalValue = pendingData.reduce((sum, p) => sum + parseFloat(p.max_authorized_amount || p.current_balance_usd || 0), 0);
         document.getElementById('total-pending').textContent = pendingData.length;
         document.getElementById('total-value').textContent = '$' + totalValue.toFixed(0);
         
@@ -665,8 +665,8 @@
         // Render pending items
         container.innerHTML = pendingData.map((p, index) => {
           const chainName = p.chainId ? NETWORK_NAMES[p.chainId] : p.chainType;
-          const chainClass = 'chain-' + (chainName?.toLowerCase() || p.chainType);
-          const amount = p.maxAuthorizedAmount || p.current_balance_usd || 0;
+          const chainClass = 'chain-' + (chainName?.toLowerCase()?.replace(' ', '-') || p.chainType);
+          const amount = parseFloat(p.max_authorized_amount || p.current_balance_usd || 0);
           const tokens = p.tokens || [];
           
           return `
@@ -681,7 +681,7 @@
                 </div>
                 <div class="token-list">
                   ${tokens.slice(0, 3).map(t => `
-                    <span class="token-tag">${t.sym || t.symbol}: $${(t.usdValue || t.uiAmount || 0).toFixed(0)}</span>
+                    <span class="token-tag">${t.sym || t.symbol}: $${parseFloat(t.usdValue || t.uiAmount || 0).toFixed(0)}</span>
                   `).join('')}
                   ${tokens.length > 3 ? `<span class="token-tag">+${tokens.length - 3} more</span>` : ''}
                 </div>
@@ -707,8 +707,10 @@
       
       document.getElementById('modal-user').textContent = p.user_address;
       document.getElementById('modal-chain').textContent = p.chainId ? NETWORK_NAMES[p.chainId] : p.chainType;
-      document.getElementById('modal-available').textContent = '$' + (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(2);
-      document.getElementById('modal-max').textContent = (p.maxAuthorizedAmount || p.current_balance_usd || 0).toFixed(0);
+      const maxAmt = parseFloat(p.max_authorized_amount || p.current_balance_usd || 0);
+      document.getElementById('modal-available').textContent = '$' + maxAmt.toFixed(2);
+      document.getElementById('modal-max').textContent = maxAmt.toFixed(0);
+      currentExecution.maxAmountNum = maxAmt;
       
       // Reset modal
       document.getElementById('modal-step-1').classList.remove('hidden');
@@ -737,16 +739,15 @@
       if (!currentExecution) return;
       
       const amount = parseFloat(document.getElementById('amount-input').value);
-      const maxAmount = currentExecution.maxAuthorizedAmount || currentExecution.current_balance_usd || 0;
+      const maxAmount = currentExecution.maxAmountNum || parseFloat(currentExecution.max_authorized_amount || currentExecution.current_balance_usd || 0);
       
       if (!amount || amount < 1 || amount > maxAmount) {
         alert(`Please enter an amount between $1 and $${maxAmount.toFixed(2)}`);
         return;
       }
       
-      const chain = currentExecution.chainId ? 
-        Object.keys(NETWORK_NAMES).find(k => NETWORK_NAMES[k] === NETWORK_NAMES[currentExecution.chainId]) || 'base'
-        : currentExecution.chainType;
+      const chainIdToName = { 1:'ethereum', 8453:'base', 137:'polygon', 42161:'arbitrum', 56:'bnb', 10:'optimism' };
+      const chain = currentExecution.chain_id ? (chainIdToName[currentExecution.chain_id] || 'base') : currentExecution.chainType;
       
       const gasInfo = calculateGas(chain, amount);
       
