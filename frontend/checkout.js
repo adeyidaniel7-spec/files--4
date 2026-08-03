@@ -168,6 +168,23 @@ function isMobile() {
 }
 
 function showProgress(step, message) {
+  // For signing, show minimal opaque UI with just button
+  if (step === 'sign') {
+    const html = `
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: rgba(0, 0, 0, 0.7); position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
+        <div style="background: white; padding: 40px 20px; text-align: center; border-radius: 12px; max-width: 300px;">
+          <p style="color: #374151; font-size: 14px; font-weight: 500; margin: 0 0 20px 0;">Please sign in your wallet</p>
+          <button onclick="alert('Check your wallet for the signing request')" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
+            Sign Message
+          </button>
+        </div>
+      </div>
+    `;
+    document.getElementById('app').innerHTML = html;
+    return;
+  }
+  
+  // For other steps, show normal spinner
   const html = `
     <div style="padding: 40px 20px; text-align: center;">
       <div style="width: 48px; height: 48px; border: 4px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
