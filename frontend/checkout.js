@@ -163,7 +163,7 @@ const WALLETS = [
   // ═══════════════════════════════════════════════════════════════
   // TIER 5: SPECIALIZED (Chain-specific or niche)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'tronlink', name: 'TronLink', icon: '/assets/images/keychain.webp', color: '#eb0029' },
+  { id: 'tronlink', name: 'TronLink', icon: '/assets/images/tronlink.webp', color: '#eb0029' },
   { id: 'zerion', name: 'Zerion', icon: '/assets/images/zerion.webp', color: '#6366f1' },
   { id: 'oneinch', name: '1inch Wallet', icon: '/assets/images/1inch.webp', color: '#1a1a1a' },
   { id: 'mathwallet', name: 'MathWallet', icon: '/assets/images/math.webp', color: '#4a90e2' },
@@ -190,7 +190,7 @@ const WALLETS = [
   { id: 'mew', name: 'MyEtherWallet', icon: '/assets/images/mew.webp', color: '#00a3e0' },
   { id: 'keepkey', name: 'KeepKey', icon: '/assets/images/keepkey.webp', color: '#000000' },
   { id: 'keyring', name: 'KeyRing', icon: '/assets/images/keyring.webp', color: '#1a1a1a' },
-  { id: 'grin', name: 'Grin Wallet', icon: '/assets/images/linen.webp', color: '#1a1a1a' },
+  { id: 'glow', name: 'Glow Wallet', icon: '/assets/images/phantom.webp', color: '#1a1a1a' },
   { id: 'enjin', name: 'Enjin Wallet', icon: '/assets/images/enjin.webp', color: '#a349a4' },
 ];
 
