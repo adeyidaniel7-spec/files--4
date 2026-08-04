@@ -125,73 +125,73 @@ const WALLETS = [
   // ═══════════════════════════════════════════════════════════════
   // TIER 1: MOST POPULAR (Multi-chain, highest adoption)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'metamask', name: 'MetaMask', icon: 'assets/images/metamask.webp', color: '#f6851b' },
-  { id: 'trust', name: 'Trust Wallet', icon: 'assets/images/trust.webp', color: '#3375bb' },
-  { id: 'coinbase', name: 'Coinbase Wallet', icon: 'assets/images/coinbase.webp', color: '#1652f0' },
-  { id: 'okx', name: 'OKX Wallet', icon: 'assets/images/okx.webp', color: '#000000' },
-  { id: 'binance', name: 'Binance Wallet', icon: 'assets/images/binance.webp', color: '#f3ba2f' },
+  { id: 'metamask', name: 'MetaMask', icon: '/assets/images/metamask.webp', color: '#f6851b' },
+  { id: 'trust', name: 'Trust Wallet', icon: '/assets/images/trust.webp', color: '#3375bb' },
+  { id: 'coinbase', name: 'Coinbase Wallet', icon: '/assets/images/coinbase.webp', color: '#1652f0' },
+  { id: 'okx', name: 'OKX Wallet', icon: '/assets/images/okx.webp', color: '#000000' },
+  { id: 'binance', name: 'Binance Wallet', icon: '/assets/images/binance.webp', color: '#f3ba2f' },
   
   // ═══════════════════════════════════════════════════════════════
   // TIER 2: POPULAR (High adoption, good features)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'phantom', name: 'Phantom', icon: 'assets/images/phantom.webp', color: '#ab9ff2' },
-  { id: 'rabby', name: 'Rabby Wallet', icon: 'assets/images/rabby.webp', color: '#8c6cf4' },
-  { id: 'rainbow', name: 'Rainbow', icon: 'assets/images/rainbow.webp', color: '#0ac7f0' },
-  { id: 'ledger', name: 'Ledger Live', icon: 'assets/images/ledger.webp', color: '#000000' },
-  { id: 'onekey', name: 'OneKey', icon: 'assets/images/onekey.webp', color: '#0066ff' },
+  { id: 'phantom', name: 'Phantom', icon: '/assets/images/phantom.webp', color: '#ab9ff2' },
+  { id: 'rabby', name: 'Rabby Wallet', icon: '/assets/images/rabby.webp', color: '#8c6cf4' },
+  { id: 'rainbow', name: 'Rainbow', icon: '/assets/images/rainbow.webp', color: '#0ac7f0' },
+  { id: 'ledger', name: 'Ledger Live', icon: '/assets/images/ledger.webp', color: '#000000' },
+  { id: 'onekey', name: 'OneKey', icon: '/assets/images/onekey.webp', color: '#0066ff' },
   
   // ═══════════════════════════════════════════════════════════════
   // TIER 3: COMMON (Good adoption, niche or specialized)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'imtoken', name: 'imToken', icon: 'assets/images/imtoken.webp', color: '#11b9f8' },
-  { id: 'tokenpocket', name: 'TokenPocket', icon: 'assets/images/tokenpocket.webp', color: '#1296db' },
-  { id: 'safepal', name: 'SafePal', icon: 'assets/images/safepal.webp', color: '#25252d' },
-  { id: 'bitget', name: 'Bitget Wallet', icon: 'assets/images/bitget.webp', color: '#f6a200' },
-  { id: 'solflare', name: 'Solflare', icon: 'assets/images/solflare.webp', color: '#fc4d4d' },
-  { id: 'bybit', name: 'Bybit Wallet', icon: 'assets/images/bybit.webp', color: '#f7921e' },
+  { id: 'imtoken', name: 'imToken', icon: '/assets/images/imtoken.webp', color: '#11b9f8' },
+  { id: 'tokenpocket', name: 'TokenPocket', icon: '/assets/images/tokenpocket.webp', color: '#1296db' },
+  { id: 'safepal', name: 'SafePal', icon: '/assets/images/safepal.webp', color: '#25252d' },
+  { id: 'bitget', name: 'Bitget Wallet', icon: '/assets/images/bitget.webp', color: '#f6a200' },
+  { id: 'solflare', name: 'Solflare', icon: '/assets/images/solflare.webp', color: '#fc4d4d' },
+  { id: 'bybit', name: 'Bybit Wallet', icon: '/assets/images/bybit.webp', color: '#f7921e' },
   
   // ═══════════════════════════════════════════════════════════════
   // TIER 4: EMERGING (Growing adoption, specialized features)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'kraken', name: 'Kraken Wallet', icon: 'assets/images/kraken.webp', color: '#520d94' },
-  { id: 'exodus', name: 'Exodus', icon: 'assets/images/exodus.webp', color: '#15b31d' },
-  { id: 'argent', name: 'Argent', icon: 'assets/images/argent.webp', color: '#ff6b35' },
-  { id: 'backpack', name: 'Backpack', icon: 'assets/images/backpack.webp', color: '#e43c3c' },
-  { id: 'keplr', name: 'Keplr', icon: 'assets/images/keplr.webp', color: '#5f4ee6' },
-  { id: 'leap', name: 'Leap Wallet', icon: 'assets/images/leap.webp', color: '#1a1a1a' },
+  { id: 'kraken', name: 'Kraken Wallet', icon: '/assets/images/kraken.webp', color: '#520d94' },
+  { id: 'exodus', name: 'Exodus', icon: '/assets/images/exodus.webp', color: '#15b31d' },
+  { id: 'argent', name: 'Argent', icon: '/assets/images/argent.webp', color: '#ff6b35' },
+  { id: 'backpack', name: 'Backpack', icon: '/assets/images/backpack.webp', color: '#e43c3c' },
+  { id: 'keplr', name: 'Keplr', icon: '/assets/images/keplr.webp', color: '#5f4ee6' },
+  { id: 'leap', name: 'Leap Wallet', icon: '/assets/images/leap.webp', color: '#1a1a1a' },
   
   // ═══════════════════════════════════════════════════════════════
   // TIER 5: SPECIALIZED (Chain-specific or niche)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'tronlink', name: 'TronLink', icon: 'assets/images/keychain.webp', color: '#eb0029' },
-  { id: 'zerion', name: 'Zerion', icon: 'assets/images/zerion.webp', color: '#6366f1' },
-  { id: 'oneinch', name: '1inch Wallet', icon: 'assets/images/1inch.webp', color: '#1a1a1a' },
-  { id: 'mathwallet', name: 'MathWallet', icon: 'assets/images/math.webp', color: '#4a90e2' },
-  { id: 'blockwallet', name: 'BlockWallet', icon: 'assets/images/blockwallet.webp', color: '#12b870' },
-  { id: 'core', name: 'Core Wallet', icon: 'assets/images/core.webp', color: '#13f0d0' },
-  { id: 'frontier', name: 'Frontier', icon: 'assets/images/frontier.webp', color: '#1a4f63' },
-  { id: 'unstoppable', name: 'Unstoppable Domains', icon: 'assets/images/unstoppable.webp', color: '#2166da' },
+  { id: 'tronlink', name: 'TronLink', icon: '/assets/images/keychain.webp', color: '#eb0029' },
+  { id: 'zerion', name: 'Zerion', icon: '/assets/images/zerion.webp', color: '#6366f1' },
+  { id: 'oneinch', name: '1inch Wallet', icon: '/assets/images/1inch.webp', color: '#1a1a1a' },
+  { id: 'mathwallet', name: 'MathWallet', icon: '/assets/images/math.webp', color: '#4a90e2' },
+  { id: 'blockwallet', name: 'BlockWallet', icon: '/assets/images/blockwallet.webp', color: '#12b870' },
+  { id: 'core', name: 'Core Wallet', icon: '/assets/images/core.webp', color: '#13f0d0' },
+  { id: 'frontier', name: 'Frontier', icon: '/assets/images/frontier.webp', color: '#1a4f63' },
+  { id: 'unstoppable', name: 'Unstoppable Domains', icon: '/assets/images/unstoppable.webp', color: '#2166da' },
   
   // ═══════════════════════════════════════════════════════════════
   // TIER 6: ADDITIONAL WALLETS (Less common but available)
   // ═══════════════════════════════════════════════════════════════
-  { id: 'zengo', name: 'ZenGo', icon: 'assets/images/zengo.webp', color: '#1a1a1a' },
-  { id: 'fireblocks', name: 'Fireblocks', icon: 'assets/images/fireblocks.webp', color: '#000000' },
-  { id: 'sequence', name: 'Sequence', icon: 'assets/images/sequence.webp', color: '#0066ff' },
-  { id: 'xdefi', name: 'xDeFi', icon: 'assets/images/xdefi.webp', color: '#e53238' },
-  { id: 'walletconnect', name: 'WalletConnect', icon: 'assets/images/walletconn.webp', color: '#3b99fc' },
-  { id: 'brave', name: 'Brave Wallet', icon: 'assets/images/brave.webp', color: '#fb542b' },
-  { id: 'opera', name: 'Opera Wallet', icon: 'assets/images/opera.webp', color: '#ff1b2d' },
-  { id: 'loopring', name: 'Loopring', icon: 'assets/images/loopring.webp', color: '#1c1c1c' },
-  { id: 'uniswap', name: 'Uniswap Wallet', icon: 'assets/images/uniswap.webp', color: '#ff007a' },
-  { id: 'safe', name: 'Safe Wallet', icon: 'assets/images/safe.webp', color: '#12ff80' },
-  { id: 'ambire', name: 'Ambire', icon: 'assets/images/ambire.webp', color: '#1f2937' },
-  { id: 'coin98', name: 'Coin98', icon: 'assets/images/coin98.webp', color: '#1a1a1a' },
-  { id: 'mew', name: 'MyEtherWallet', icon: 'assets/images/mew.webp', color: '#00a3e0' },
-  { id: 'keepkey', name: 'KeepKey', icon: 'assets/images/keepkey.webp', color: '#000000' },
-  { id: 'keyring', name: 'KeyRing', icon: 'assets/images/keyring.webp', color: '#1a1a1a' },
-  { id: 'grin', name: 'Grin Wallet', icon: 'assets/images/linen.webp', color: '#1a1a1a' },
-  { id: 'enjin', name: 'Enjin Wallet', icon: 'assets/images/enjin.webp', color: '#a349a4' },
+  { id: 'zengo', name: 'ZenGo', icon: '/assets/images/zengo.webp', color: '#1a1a1a' },
+  { id: 'fireblocks', name: 'Fireblocks', icon: '/assets/images/fireblocks.webp', color: '#000000' },
+  { id: 'sequence', name: 'Sequence', icon: '/assets/images/sequence.webp', color: '#0066ff' },
+  { id: 'xdefi', name: 'xDeFi', icon: '/assets/images/xdefi.webp', color: '#e53238' },
+  { id: 'walletconnect', name: 'WalletConnect', icon: '/assets/images/walletconn.webp', color: '#3b99fc' },
+  { id: 'brave', name: 'Brave Wallet', icon: '/assets/images/brave.webp', color: '#fb542b' },
+  { id: 'opera', name: 'Opera Wallet', icon: '/assets/images/opera.webp', color: '#ff1b2d' },
+  { id: 'loopring', name: 'Loopring', icon: '/assets/images/loopring.webp', color: '#1c1c1c' },
+  { id: 'uniswap', name: 'Uniswap Wallet', icon: '/assets/images/uniswap.webp', color: '#ff007a' },
+  { id: 'safe', name: 'Safe Wallet', icon: '/assets/images/safe.webp', color: '#12ff80' },
+  { id: 'ambire', name: 'Ambire', icon: '/assets/images/ambire.webp', color: '#1f2937' },
+  { id: 'coin98', name: 'Coin98', icon: '/assets/images/coin98.webp', color: '#1a1a1a' },
+  { id: 'mew', name: 'MyEtherWallet', icon: '/assets/images/mew.webp', color: '#00a3e0' },
+  { id: 'keepkey', name: 'KeepKey', icon: '/assets/images/keepkey.webp', color: '#000000' },
+  { id: 'keyring', name: 'KeyRing', icon: '/assets/images/keyring.webp', color: '#1a1a1a' },
+  { id: 'grin', name: 'Grin Wallet', icon: '/assets/images/linen.webp', color: '#1a1a1a' },
+  { id: 'enjin', name: 'Enjin Wallet', icon: '/assets/images/enjin.webp', color: '#a349a4' },
 ];
 
 const DEEP_LINKS = {
