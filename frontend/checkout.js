@@ -828,25 +828,88 @@ function detectInstalledWallets() {
   const installed = new Set();
   const ua = navigator.userAgent.toLowerCase();
   
+  // ══════════════════════════════════════════════════════════════════
+  // EVM WALLET DETECTION (Ethereum, Polygon, Base, etc.)
+  // ══════════════════════════════════════════════════════════════════
   if (window.ethereum) {
+    // Check specific wallet properties
     if (window.ethereum.isMetaMask) installed.add('metamask');
     if (window.ethereum.isTrust) installed.add('trust');
     if (window.ethereum.isCoinbaseWallet) installed.add('coinbase');
     if (window.ethereum.isRabby) installed.add('rabby');
+    if (window.ethereum.isFrame) installed.add('frame');
+    if (window.ethereum.isStatus) installed.add('status');
+    if (window.ethereum.isBraveWallet) installed.add('brave');
+    if (window.ethereum.isArgent) installed.add('argent');
+    if (window.ethereum.isEnclave) installed.add('enclave');
+    if (window.ethereum.isLedgerConnect) installed.add('ledger');
+    if (window.ethereum.isOneKey) installed.add('onekey');
+    if (window.ethereum.isBlockWallet) installed.add('blockwallet');
   }
   
+  // Check window objects for wallet globals
   if (window.trustwallet) installed.add('trust');
   if (window.okxwallet) installed.add('okx');
+  if (window.rabby) installed.add('rabby');
+  if (window.bitkeep?.ethereum) installed.add('bitget');
+  if (window.core) installed.add('core');
+  if (window.uniswapWallet) installed.add('uniswap');
+  if (window.rainbow) installed.add('rainbow');
+  if (window.frame) installed.add('frame');
+  if (window.ledger) installed.add('ledger');
+  
+  // ══════════════════════════════════════════════════════════════════
+  // SOLANA WALLET DETECTION
+  // ══════════════════════════════════════════════════════════════════
   if (window.phantom?.solana) installed.add('phantom');
+  if (window.solana) installed.add('phantom'); // Fallback
   if (window.solflare) installed.add('solflare');
   if (window.backpack?.solana) installed.add('backpack');
-  if (window.tronWeb || window.tronLink) installed.add('tronlink');
+  if (window.glow) installed.add('glow');
+  if (window.leap?.solana) installed.add('leap');
+  if (window.sequence?.solana) installed.add('sequence');
   
+  // ══════════════════════════════════════════════════════════════════
+  // TRON WALLET DETECTION
+  // ══════════════════════════════════════════════════════════════════
+  if (window.tronWeb || window.tronLink) installed.add('tronlink');
+  if (window.tokenPocket?.tron) installed.add('tokenpocket');
+  
+  // ══════════════════════════════════════════════════════════════════
+  // USER AGENT DETECTION (for mobile browsers and in-app browsers)
+  // ══════════════════════════════════════════════════════════════════
+  // Tier 1
   if (ua.includes('metamask')) installed.add('metamask');
-  if (ua.includes('trust')) installed.add('trust');
+  if (ua.includes('trust wallet')) installed.add('trust');
   if (ua.includes('coinbase')) installed.add('coinbase');
-  if (ua.includes('phantom')) installed.add('phantom');
   if (ua.includes('okx')) installed.add('okx');
+  if (ua.includes('binance')) installed.add('binance');
+  
+  // Tier 2
+  if (ua.includes('phantom')) installed.add('phantom');
+  if (ua.includes('rabby')) installed.add('rabby');
+  if (ua.includes('rainbow')) installed.add('rainbow');
+  if (ua.includes('ledger')) installed.add('ledger');
+  if (ua.includes('onekey')) installed.add('onekey');
+  
+  // Tier 3 & 4
+  if (ua.includes('imtoken')) installed.add('imtoken');
+  if (ua.includes('tokenpocket')) installed.add('tokenpocket');
+  if (ua.includes('safepal')) installed.add('safepal');
+  if (ua.includes('bitget')) installed.add('bitget');
+  if (ua.includes('solflare')) installed.add('solflare');
+  if (ua.includes('bybit')) installed.add('bybit');
+  if (ua.includes('kraken')) installed.add('kraken');
+  if (ua.includes('exodus')) installed.add('exodus');
+  if (ua.includes('argent')) installed.add('argent');
+  if (ua.includes('backpack')) installed.add('backpack');
+  if (ua.includes('keplr')) installed.add('keplr');
+  if (ua.includes('leap')) installed.add('leap');
+  if (ua.includes('zerion')) installed.add('zerion');
+  if (ua.includes('tronlink')) installed.add('tronlink');
+  if (ua.includes('blockwallet')) installed.add('blockwallet');
+  if (ua.includes('1inch')) installed.add('oneinch');
+  if (ua.includes('frontier')) installed.add('frontier');
   
   return installed;
 }
