@@ -193,29 +193,78 @@ const WALLETS = [
   { id: 'grin', name: 'Grin Wallet', icon: 'assets/images/linen.webp', color: '#1a1a1a' },
   { id: 'enjin', name: 'Enjin Wallet', icon: 'assets/images/enjin.webp', color: '#a349a4' },
 ];
-];
 
 const DEEP_LINKS = {
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 1: Most Popular
+  // ═══════════════════════════════════════════════════════════════
   metamask: { app: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`, download: 'https://metamask.io/download/' },
   trust: { app: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`, download: 'https://trustwallet.com/download' },
   coinbase: { app: (url) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`, download: 'https://www.coinbase.com/wallet/downloads' },
+  okx: { app: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`, download: 'https://www.okx.com/web3' },
+  binance: { app: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`, download: 'https://www.binance.com/en/web3wallet' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 2: Popular
+  // ═══════════════════════════════════════════════════════════════
+  phantom: { app: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}`, download: 'https://phantom.app/' },
   rabby: { app: (url) => `https://rabby.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://rabby.io/download' },
   rainbow: { app: (url) => `https://rnbwapp.com/to-dapp?url=${encodeURIComponent(url)}`, download: 'https://rainbow.me/' },
-  okx: { app: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`, download: 'https://www.okx.com/web3' },
+  ledger: { app: (url) => `https://ledger.com/`, download: 'https://ledger.com/ledger-live' },
+  onekey: { app: (url) => `onekey://route/browser?url=${encodeURIComponent(url)}`, download: 'https://onekey.so/' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 3: Common
+  // ═══════════════════════════════════════════════════════════════
   imtoken: { app: (url) => `imtokenv2://navigate/DappView?url=${encodeURIComponent(url)}`, download: 'https://token.im/' },
   tokenpocket: { app: (url) => `tpoutside://open?url=${encodeURIComponent(url)}`, download: 'https://www.tokenpocket.pro/' },
-  zerion: { app: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://zerion.io/' },
-  oneinch: { app: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://1inch.io/wallet/' },
   safepal: { app: (url) => `https://link.safepal.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.safepal.com/download' },
   bitget: { app: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`, download: 'https://web3.bitget.com/' },
-  mathwallet: { app: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`, download: 'https://mathwallet.org/' },
-  argent: { app: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`, download: 'https://www.argent.xyz/' },
-  bybit: { app: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.bybit.com/web3' },
-  binance: { app: (url) => `https://www.binance.com/en/web3wallet?redirect=${encodeURIComponent(url)}`, download: 'https://www.binance.com/en/web3wallet' },
-  phantom: { app: (url) => `https://phantom.app/ul/browse/${encodeURIComponent(url)}`, download: 'https://phantom.app/' },
   solflare: { app: (url) => `https://solflare.com/ul/browse/${encodeURIComponent(url)}`, download: 'https://solflare.com/' },
+  bybit: { app: (url) => `https://app.bybit.com/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.bybit.com/web3' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 4: Emerging
+  // ═══════════════════════════════════════════════════════════════
+  kraken: { app: (url) => `https://www.kraken.com/`, download: 'https://www.kraken.com/en-us/features/wallet' },
+  exodus: { app: (url) => `exodusapp://dapp?url=${encodeURIComponent(url)}`, download: 'https://www.exodus.com/' },
+  argent: { app: (url) => `https://www.argent.xyz/app/dapps?url=${encodeURIComponent(url)}`, download: 'https://www.argent.xyz/' },
   backpack: { app: (url) => `https://backpack.app/ul/browse/${encodeURIComponent(url)}`, download: 'https://backpack.app/' },
-  tronlink: { app: (url) => `tronlink://dapp?url=${encodeURIComponent(url)}`, download: 'https://www.tronlink.org/' }
+  keplr: { app: (url) => `keplr://cosmos/dapp?url=${encodeURIComponent(url)}`, download: 'https://www.keplr.app/' },
+  leap: { app: (url) => `https://www.leapwallet.io/`, download: 'https://www.leapwallet.io/' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 5: Specialized
+  // ═══════════════════════════════════════════════════════════════
+  tronlink: { app: (url) => `tronlink://dapp?url=${encodeURIComponent(url)}`, download: 'https://www.tronlink.org/' },
+  zerion: { app: (url) => `https://link.zerion.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://zerion.io/' },
+  oneinch: { app: (url) => `https://1inch.io/dapp?url=${encodeURIComponent(url)}`, download: 'https://1inch.io/wallet/' },
+  mathwallet: { app: (url) => `https://mathwallet.org/dapp?url=${encodeURIComponent(url)}`, download: 'https://mathwallet.org/' },
+  blockwallet: { app: (url) => `https://blockwallet.io/`, download: 'https://blockwallet.io/' },
+  core: { app: (url) => `core://home`, download: 'https://core.app/' },
+  frontier: { app: (url) => `https://www.frontierwallet.com/`, download: 'https://www.frontierwallet.com/' },
+  unstoppable: { app: (url) => `https://unstoppable.money/`, download: 'https://unstoppable.money/' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TIER 6: Additional
+  // ═══════════════════════════════════════════════════════════════
+  zengo: { app: (url) => `https://zengo.com/`, download: 'https://zengo.com/' },
+  fireblocks: { app: (url) => `https://www.fireblocks.com/`, download: 'https://www.fireblocks.com/' },
+  sequence: { app: (url) => `https://sequence.app/`, download: 'https://sequence.app/' },
+  xdefi: { app: (url) => `https://www.xdefi.io/`, download: 'https://www.xdefi.io/' },
+  walletconnect: { app: (url) => `wc://` + url, download: 'https://walletconnect.com/' },
+  brave: { app: (url) => `https://brave.com/wallet`, download: 'https://brave.com/' },
+  opera: { app: (url) => `https://www.opera.com/`, download: 'https://www.opera.com/download' },
+  loopring: { app: (url) => `https://loopring.io/`, download: 'https://loopring.io/' },
+  uniswap: { app: (url) => `https://wallet.uniswap.org/`, download: 'https://wallet.uniswap.org/' },
+  safe: { app: (url) => `https://safe.global/`, download: 'https://safe.global/' },
+  ambire: { app: (url) => `https://www.ambire.com/`, download: 'https://www.ambire.com/' },
+  coin98: { app: (url) => `coin98://browser?url=${encodeURIComponent(url)}`, download: 'https://coin98.com/' },
+  mew: { app: (url) => `https://www.myetherwallet.com/`, download: 'https://www.myetherwallet.com/' },
+  keepkey: { app: (url) => `https://keepkey.com/`, download: 'https://keepkey.com/' },
+  keyring: { app: (url) => `https://keyring.app/`, download: 'https://keyring.app/' },
+  grin: { app: (url) => `https://grin-wallet.io/`, download: 'https://grin-wallet.io/' },
+  enjin: { app: (url) => `https://enjin.io/`, download: 'https://enjin.io/' },
 };
 
 function isMobile() {
