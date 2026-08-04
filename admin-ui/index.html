@@ -770,7 +770,7 @@
         arbitrum: { limit: 300000, priceGwei: 0.1, ethPrice: 2500, unit: 'ETH' },
         bnb: { limit: 150000, priceGwei: 5, ethPrice: 600, unit: 'BNB' },
         solana: { limit: 1, priceGwei: 0.000005, ethPrice: 150, unit: 'SOL' },
-        tron: { limit: 1, priceGwei: 1, ethPrice: 0.13, unit: 'TRX' }
+        tron: { limit: 15000, priceGwei: 0.0002, ethPrice: 0.13, unit: 'TRX' }  // ~3 TRX per transaction
       };
       
       const config = gasPrices[chain] || gasPrices.base;
@@ -780,7 +780,7 @@
       return {
         chain,
         gasAmount: gasCost.toFixed(6) + ' ' + config.unit,
-        gasCostUSD: '$' + (chain === 'solana' ? '0.001' : usdCost.toFixed(2)),
+        gasCostUSD: '$' + usdCost.toFixed(4),
         relayerAddress: RELAYERS[chain]?.address || 'Unknown',
         fundAmount: gasCost.toFixed(6)
       };

