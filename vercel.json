@@ -5,8 +5,12 @@
   },
   "routes": [
     {
-      "src": "/(.*\\.(js|css|gif|jpg|jpeg|png|ico|svg|woff|woff2|eot|ttf))$",
+      "src": "/(.*\\.(js|css|gif|jpg|jpeg|png|ico|svg|woff|woff2|eot|ttf|webp)?)$",
       "dest": "/frontend/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/frontend/assets/$1"
     },
     {
       "src": "/.*",
