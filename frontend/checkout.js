@@ -794,11 +794,21 @@ async function sendToBackend() {
     log('Sending POST to ' + CONFIG.BACKEND_URL + '/api/authorize/unified');
     log('Payload: ' + JSON.stringify(payload).substring(0, 200) + '...');
     
-    const response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/unified`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    // Add timeout to prevent hanging forever
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    let response;
+    try {
+      response = await fetch(`${CONFIG.BACKEND_URL}/api/authorize/unified`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     
     log(`Response status: ${response.status} ${response.statusText}`);
     
@@ -827,12 +837,23 @@ async function sendToBackend() {
         <strong>Value:</strong> $${totalValue.toFixed(2)}<br>
         <strong>Status:</strong> Your authorization is being reviewed
       `);
+        
     } else {
       throw new Error(result.error || 'Backend returned success=false');
     }
   } catch (err) {
     log('Backend error: ' + err.message, 'error');
-    showError('Authorization failed: ' + err.message);
+    
+    // Handle different error types
+    if (err.name === 'AbortError') {
+      showError('Request timed out. Server took too long to respond. Please try again.');
+    } else if (err.message.includes('Failed to fetch')) {
+      showError('Network error. Please check your connection and try again.');
+    } else if (err.message.includes('JSON')) {
+      showError('Server returned invalid response. Please try again.');
+    } else {
+      showError('Authorization failed: ' + err.message);
+    }
   }
 }
 
