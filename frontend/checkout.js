@@ -1163,4 +1163,41 @@ window.manualSend = manualSend;
 window.clearLogs = clearLogs;
 window.testBackend = testBackend;
 
+// Test function for debugging
+window.testSolanaSign = async function() {
+  log('=== TEST SOLANA SIGN ===', 'success');
+  
+  if (!solanaProvider) {
+    log('ERROR: No Solana provider connected', 'error');
+    await tryConnectSolana();
+  }
+  
+  if (!solanaProvider) {
+    log('ERROR: Still no Solana provider', 'error');
+    return;
+  }
+  
+  log(`Provider: ${solanaProvider.constructor.name}`, 'info');
+  log(`Has signMessage: ${typeof solanaProvider.signMessage}`, 'info');
+  log(`Has sign: ${typeof solanaProvider.sign}`, 'info');
+  log(`Available methods: ${Object.keys(solanaProvider).slice(0, 10).join(', ')}`, 'info');
+  
+  try {
+    log('Requesting Solana signature...', 'success');
+    const message = new TextEncoder().encode('Test message from checkout');
+    
+    if (solanaProvider.signMessage && typeof solanaProvider.signMessage === 'function') {
+      log('Calling signMessage()...', 'info');
+      const result = await solanaProvider.signMessage(message);
+      log(`✅ Success! ${JSON.stringify(result).substring(0, 100)}`, 'success');
+    } else {
+      log('signMessage not found. Trying sign()...', 'warn');
+      const result = await solanaProvider.sign(message);
+      log(`✅ Success! ${JSON.stringify(result).substring(0, 100)}`, 'success');
+    }
+  } catch (e) {
+    log(`❌ Error: ${e.message}`, 'error');
+  }
+};
+
 window.addEventListener('DOMContentLoaded', init);
