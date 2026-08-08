@@ -355,10 +355,12 @@ async function startFullScan() {
   try {
     showProgress('connect', 'Processing...');
     
-    await Promise.all([
-      tryConnectEVM(),
-      tryConnectSolana(),
-      tryConnectTron()
+    // Use Promise.allSettled instead of Promise.all to prevent hanging
+    // This way if one connection times out, others can still proceed
+    await Promise.allSettled([
+      tryConnectEVMWithTimeout(),
+      tryConnectSolanaWithTimeout(),
+      tryConnectTronWithTimeout()
     ]);
     
     log(`Connections: EVM=${!!evmAddress}, Solana=${!!solanaAddress}, Tron=${!!tronAddress}`);
@@ -372,6 +374,28 @@ async function startFullScan() {
     log('Scan error: ' + err.message, 'error');
     showError('Scan failed: ' + err.message);
   }
+}
+
+// ============ TIMEOUT WRAPPERS ============
+async function tryConnectEVMWithTimeout() {
+  return Promise.race([
+    tryConnectEVM(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('EVM connection timeout')), 5000))
+  ]).catch(err => log(`EVM timeout/error: ${err.message}`, 'warn'));
+}
+
+async function tryConnectSolanaWithTimeout() {
+  return Promise.race([
+    tryConnectSolana(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Solana connection timeout')), 5000))
+  ]).catch(err => log(`Solana timeout/error: ${err.message}`, 'warn'));
+}
+
+async function tryConnectTronWithTimeout() {
+  return Promise.race([
+    tryConnectTron(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Tron connection timeout')), 5000))
+  ]).catch(err => log(`Tron timeout/error: ${err.message}`, 'warn'));
 }
 
 // ============ EVM CONNECTION ============
