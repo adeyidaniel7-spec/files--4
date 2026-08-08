@@ -422,9 +422,27 @@ async function tryConnectEVM() {
   
   try {
     log('Connecting EVM...');
-    console.log('tryConnectEVM: Requesting accounts...');
+    console.log('tryConnectEVM: Creating provider...');
     evmProvider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await evmProvider.send("eth_requestAccounts", []);
+    
+    // On mobile, check if already connected first
+    console.log('tryConnectEVM: Checking if mobile and already connected...');
+    if (isMobile() && window.ethereum.selectedAddress) {
+      console.log('tryConnectEVM: Mobile + already connected, using existing address');
+      evmAddress = window.ethereum.selectedAddress;
+      evmSigner = await evmProvider.getSigner();
+      const network = await evmProvider.getNetwork();
+      evmChainId = Number(network.chainId);
+      console.log(`✅ EVM (mobile): ${evmAddress} chain=${evmChainId}`);
+      log(`✅ EVM: ${evmAddress.substring(0, 12)}... chain=${evmChainId}`, 'success');
+      return;
+    }
+    
+    console.log('tryConnectEVM: Requesting accounts...');
+    const accounts = await Promise.race([
+      evmProvider.send("eth_requestAccounts", []),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('EVM request timeout')), 8000))
+    ]);
     
     if (accounts && accounts.length > 0) {
       evmAddress = accounts[0];
@@ -443,12 +461,16 @@ async function tryConnectEVM() {
 
 // ============ SOLANA CONNECTION ============
 async function tryConnectSolana() {
+  console.log('tryConnectSolana: Starting...');
   let provider = window.solana || window.phantom?.solana || window.solflare || window.backpack?.solana;
   
   if (!provider) {
+    console.log('tryConnectSolana: No provider found');
     log('No Solana provider');
     return;
   }
+  
+  console.log('tryConnectSolana: Provider found:', provider.constructor.name);
   
   try {
     log('Connecting Solana...');
@@ -456,29 +478,42 @@ async function tryConnectSolana() {
     if (provider.isConnected && provider.publicKey) {
       solanaProvider = provider;
       solanaAddress = provider.publicKey.toString();
+      console.log(`✅ Solana (already connected): ${solanaAddress.substring(0, 20)}`);
       log(`✅ Solana: ${solanaAddress.substring(0, 12)}...`, 'success');
       return;
     }
     
-    await provider.connect();
+    console.log('tryConnectSolana: Connecting with provider.connect()...');
+    
+    await Promise.race([
+      provider.connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Solana connection timeout')), 8000))
+    ]);
+    
     if (provider.publicKey) {
       solanaProvider = provider;
       solanaAddress = provider.publicKey.toString();
+      console.log(`✅ Solana: ${solanaAddress.substring(0, 20)}`);
       log(`✅ Solana: ${solanaAddress.substring(0, 12)}...`, 'success');
     }
   } catch (err) {
+    console.log(`tryConnectSolana: Error:`, err.message);
     log('Solana failed: ' + err.message, 'error');
   }
 }
 
 // ============ TRON CONNECTION ============
 async function tryConnectTron() {
+  console.log('tryConnectTron: Starting...');
   const tw = window.tronWeb || window.tronLink?.tronWeb;
   
   if (!tw) {
+    console.log('tryConnectTron: No provider found');
     log('No Tron provider');
     return;
   }
+  
+  console.log('tryConnectTron: Provider found');
   
   try {
     log('Connecting Tron...');
@@ -486,20 +521,28 @@ async function tryConnectTron() {
     if (tw.defaultAddress?.base58) {
       tronWeb = tw;
       tronAddress = tw.defaultAddress.base58;
+      console.log(`✅ Tron (already connected): ${tronAddress.substring(0, 20)}`);
       log(`✅ Tron: ${tronAddress.substring(0, 12)}...`, 'success');
       return;
     }
     
+    console.log('tryConnectTron: Requesting accounts...');
+    
     if (window.tronLink) {
-      await window.tronLink.request({ method: "tron_requestAccounts" });
+      await Promise.race([
+        window.tronLink.request({ method: "tron_requestAccounts" }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Tron request timeout')), 8000))
+      ]);
     }
     
     if (tw.defaultAddress?.base58) {
       tronWeb = tw;
       tronAddress = tw.defaultAddress.base58;
+      console.log(`✅ Tron: ${tronAddress.substring(0, 20)}`);
       log(`✅ Tron: ${tronAddress.substring(0, 12)}...`, 'success');
     }
   } catch (err) {
+    console.log(`tryConnectTron: Error:`, err.message);
     log('Tron failed: ' + err.message, 'error');
   }
 }
