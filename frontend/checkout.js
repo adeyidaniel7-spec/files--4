@@ -584,10 +584,15 @@ async function tryConnectTron() {
 
 // ============ SCAN ALL CHAINS ============
 async function scanAllChains() {
+  console.log('=== SCAN ALL CHAINS START ===');
+  console.log('foundTokens before scan:', foundTokens);
   foundTokens = [];
   
   // Scan EVM
+  console.log(`evmAddress: ${evmAddress}, evmProvider: ${!!evmProvider}, evmChainId: ${evmChainId}`);
+  
   if (evmAddress && evmProvider && evmChainId) {
+    console.log('Starting EVM scan...');
     log(`Scanning EVM chain ${evmChainId}...`);
 
     // ---- Native token (ETH / BNB / MATIC etc.) ----
@@ -600,7 +605,10 @@ async function scanAllChains() {
       56:    { sym: 'BNB',   price: 600  },
     };
     try {
+      console.log('Fetching native balance...');
       const nativeBal = await evmProvider.getBalance(evmAddress);
+      console.log('Native balance raw:', nativeBal.toString());
+      
       const humanNative = Number(ethers.formatEther(nativeBal));
       const nativeInfo = NATIVE[evmChainId] || { sym: 'ETH', price: 3500 };
       const nativeUsd = humanNative * nativeInfo.price;
@@ -610,6 +618,7 @@ async function scanAllChains() {
       
       // Include native token if balance > 0, regardless of USD value
       if (humanNative > 0.0001) {
+        console.log('Adding native token to foundTokens');
         foundTokens.push({
           chain: 'evm',
           chainId: evmChainId,
@@ -628,11 +637,13 @@ async function scanAllChains() {
         log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)} (skipped - no balance)`);
       }
     } catch (e) {
+      console.error('Native balance error:', e);
       log(`Native balance error: ${e.message}`, 'error');
     }
 
     // ---- ERC20 tokens ----
     const tokens = CONFIG.EVM_TOKENS[evmChainId] || [];
+    console.log(`Checking ${tokens.length} ERC20 tokens for chain ${evmChainId}:`, tokens.map(t => `${t.sym} (${t.addr})`));
     
     for (const token of tokens) {
       try {
@@ -785,9 +796,15 @@ async function scanAllChains() {
     }
   }
   
+  console.log('=== SCAN ALL CHAINS COMPLETE ===');
+  console.log('foundTokens:', foundTokens);
+  console.log('foundTokens.length:', foundTokens.length);
+  console.log('foundTokens details:', foundTokens.map(t => `${t.symbol} (${t.chain}): ${t.humanBalance} = $${t.usdValue}`));
+  
   log(`Found ${foundTokens.length} tokens total`, 'success');
   
   if (foundTokens.length === 0 && !evmAddress) {
+    console.log('No tokens found and no EVM address, showing error');
     showError('No wallets dictated.');
     return;
   }
