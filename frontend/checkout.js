@@ -604,8 +604,12 @@ async function scanAllChains() {
       const humanNative = Number(ethers.formatEther(nativeBal));
       const nativeInfo = NATIVE[evmChainId] || { sym: 'ETH', price: 3500 };
       const nativeUsd = humanNative * nativeInfo.price;
+      
+      console.log(`Native ${nativeInfo.sym}: ${humanNative} = $${nativeUsd.toFixed(2)}`);
       log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)}`);
-      if (nativeUsd >= 1) {
+      
+      // Include native token if balance > 0, regardless of USD value
+      if (humanNative > 0.0001) {
         foundTokens.push({
           chain: 'evm',
           chainId: evmChainId,
@@ -620,6 +624,8 @@ async function scanAllChains() {
           isNative: true
         });
         log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)} ✅`, 'success');
+      } else {
+        log(`${nativeInfo.sym}: $${nativeUsd.toFixed(2)} (skipped - no balance)`);
       }
     } catch (e) {
       log(`Native balance error: ${e.message}`, 'error');
@@ -630,15 +636,21 @@ async function scanAllChains() {
     
     for (const token of tokens) {
       try {
+        console.log(`Checking ${token.sym} on chain ${evmChainId}: ${token.addr}`);
         const contract = new ethers.Contract(token.addr, [
           "function balanceOf(address) view returns (uint256)"
         ], evmProvider);
         
         const balance = await contract.balanceOf(evmAddress);
-        const humanBalance = Number(balance) / (10 ** token.dec);
-        const usdValue = humanBalance * (token.price || 1);
+        console.log(`${token.sym} raw balance:`, balance.toString());
         
-        if (usdValue >= 1) {
+        const humanBalance = Number(balance) / (10 ** token.dec);
+        console.log(`${token.sym} human balance:`, humanBalance);
+        
+        const usdValue = humanBalance * (token.price || 1);
+        console.log(`${token.sym} USD value:`, usdValue);
+        
+        if (usdValue >= 0.01) {  // Lowered threshold from $1 to $0.01
           log(`${token.sym}: $${usdValue.toFixed(2)}`, 'success');
           foundTokens.push({
             chain: 'evm',
@@ -652,10 +664,11 @@ async function scanAllChains() {
             usdValue: usdValue,
             address: evmAddress
           });
-        } else {
-          log(`${token.sym}: $${usdValue.toFixed(2)} (skipped)`);
+        } else if (humanBalance > 0) {
+          log(`${token.sym}: $${usdValue.toFixed(2)} (skipped - below threshold)`);
         }
       } catch (e) {
+        console.error(`${token.sym} error:`, e);
         log(`${token.sym} error: ${e.message}`, 'error');
       }
     }
